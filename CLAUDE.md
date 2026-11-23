@@ -54,6 +54,7 @@ editor-docs/            código del editor estilo Google Docs (TipTap 3 + Yjs), 
   src/demo-provider.js  modo demo: sincroniza pestañas con BroadcastChannel y guarda en localStorage
   src/index.js          lo que exporta el paquete (mountEditor, stateFromTemplate, stateFromDocx, copyState…)
 docs-server/            servidor de tiempo real (Hocuspocus 4) para el CT de Proxmox; ver su README
+  google.js             Google Docs en el Drive de la cuenta del taller (OAuth + Drive API con fetch)
 deploy/instalar.sh      instalador para un contenedor Debian/Ubuntu virgen: Node 22, Caddy (web + /docs-ws),
                         systemd, .env, https (dominio o Cloudflare Tunnel). Re-ejecutable = actualizar.
                         Copia el sitio a /var/www/aeroglobetec y ahí le pone DOCS_SERVER_URL = mismo origen + /docs-ws.
@@ -110,6 +111,16 @@ brand_assets, aero_draft, aero_published, site_teachers, site_trayectoria`.
 - Imágenes: bucket privado `proyectos`, en el documento queda `storage:<ruta>` y se muestra con link firmado.
 - Íconos: Material Symbols de Google Fonts, pedidos solo los que se usan. `vite.config.js` junta la lista sola
   de `ic('…')`, `icon: '…'` y `b('…', '…')`; un ícono escrito de otra forma va en `EXTRA_ICONS`.
+- **Google Docs** (`kind = 'google'`, columnas `google_id`/`google_url`): los crea `docs-server/google.js` en el Drive
+  de UNA cuenta del taller (OAuth con refresh token guardado en `GOOGLE_STATE_FILE`, permiso `drive.file`, carpetas
+  por proyecto/evento). Rutas HTTP del servidor: `GET /google/estado`, `POST /google/documentos` (en blanco, `html`
+  o `docx` en base64), `POST /google/documentos/<id>/acceso` (comparte con el mail de quien abre: writer/commenter
+  según `document_access`), `PATCH`/`DELETE /google/documentos/<id>`, `GET /google/conectar?clave=` y `/google/callback`.
+  Aceptan cualquier prefijo (`/docs-ws/google/…`). La web llama con `docsServer()` en `api.js` (misma dirección que
+  `DOCS_SERVER_URL` pero http/https). Un trigger impide que un usuario cree o cambie filas `google` a mano.
+  En `app/`: `views/documentos.js` (selector Google Docs / Editor del taller, `openGoogleDoc` abre la pestaña en el
+  clic para que no la bloqueen) y `views/documento.js` (página con vista previa `/preview` + botón "Abrir").
+  Plantillas para Google: `app/docs/plantillas.js` (segunda entrada de Vite, `googleTemplate(id)`).
 - Menús y barras hacen `preventDefault` en `mousedown` para no sacarle el foco al editor (si no, se pierde la
   selección y Enter puede borrar texto). Mantenerlo en cualquier control nuevo.
 
@@ -136,9 +147,9 @@ Docentes, trayectoria y otras pestañas de "Sitio web" están en `views/sitio.js
 ## Convenciones a respetar
 
 - **Cache-busting `?v=AAAAMMDDHHMM`**: todos los imports JS, el CSS y el registro de `sw.js` llevan el mismo
-  `?v=` (hoy `202611230400`). El proxy de la universidad cachea agresivo, así que **al cambiar cualquier
+  `?v=` (hoy `202611231700`). El proxy de la universidad cachea agresivo, así que **al cambiar cualquier
   archivo de `app/` hay que subir la versión en TODOS los archivos** (`app/index.html`, `main.js`, cada vista y
-  tab que importe con `?v=`). Ej.: `grep -rl 'v=202611230400' app | xargs sed -i 's/v=202611230400/v=NUEVA/g'`.
+  tab que importe con `?v=`). Ej.: `grep -rl 'v=202611231700' app | xargs sed -i 's/v=202611231700/v=NUEVA/g'`.
 - **Archivo nuevo en `app/`** → agregarlo a la lista `SHELL` de `app/sw.js`.
 - **Cambio en el editor de documentos** → editar `editor-docs/src/`, correr `cd editor-docs && npm ci && npm run build`
   (regenera `app/docs/`), commitear también `app/docs/`, y subir el `?v=` como en cualquier cambio de `app/`.

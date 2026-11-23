@@ -1672,6 +1672,16 @@ create table if not exists public.documents (
 create index if not exists documents_project_idx on public.documents(project_id);
 create index if not exists documents_event_idx on public.documents(event_id);
 
+-- Google Docs: el documento vive en el Drive de la cuenta de Google del taller y acá queda el enlace.
+-- Estas columnas las completa solo el servidor de documentos (ver document_before_write).
+alter table public.documents add column if not exists kind text not null default 'aero';
+alter table public.documents add column if not exists google_id text;
+alter table public.documents add column if not exists google_url text;
+do $$ begin
+  alter table public.documents add constraint documents_kind_check check (kind in ('aero', 'google'));
+exception when duplicate_object then null; end $$;
+create unique index if not exists documents_google_idx on public.documents(google_id) where google_id is not null;
+
 -- Estado actual del documento (Yjs). Lo escribe el servidor de documentos.
 create table if not exists public.document_states (
   document_id uuid primary key references public.documents(id) on delete cascade,
@@ -1707,6 +1717,13 @@ language sql stable security definer set search_path = public as $$
               else public.is_approved() end;
 $$;
 
+-- Quién puede crear un documento ahí: en un proyecto o evento, quien lo ve; en el taller, docentes y líderes
+create or replace function public.can_create_document(p uuid, e uuid) returns boolean
+language sql stable security definer set search_path = public as $$
+  select case when p is null and e is null then public.is_staff() else public.can_view_doc_scope(p, e) end;
+$$;
+grant execute on function public.can_create_document(uuid, uuid) to authenticated;
+
 create or replace function public.can_view_document(d uuid) returns boolean
 language sql stable security definer set search_path = public as $$
   select exists (select 1 from documents x where x.id = d and public.can_view_doc_scope(x.project_id, x.event_id));
@@ -1732,6 +1749,14 @@ language plpgsql security definer set search_path = public as $$
 begin
   -- El servidor de documentos (service key, sin usuario) solo actualiza la fecha y el autor del último cambio
   if auth.uid() is null then return new; end if;
+  -- El enlace a Google lo pone solo el servidor: así nadie puede apuntar una fila a un archivo ajeno
+  if tg_op = 'INSERT' and (new.kind <> 'aero' or new.google_id is not null or new.google_url is not null) then
+    raise exception 'Los Google Docs los crea el servidor de documentos';
+  end if;
+  if tg_op = 'UPDATE' and (new.kind is distinct from old.kind or new.google_id is distinct from old.google_id
+                           or new.google_url is distinct from old.google_url) then
+    raise exception 'El enlace a Google de un documento no se puede cambiar';
+  end if;
   if tg_op = 'INSERT' then
     new.created_by := auth.uid();
     new.created_at := now();
@@ -1759,8 +1784,11 @@ create trigger document_before_write before insert or update on public.documents
 create or replace function public.track_documents() returns trigger
 language plpgsql security definer set search_path = public as $$
 begin
+  -- Los Google Docs los inserta el servidor (sin sesión): el autor es quien lo pidió
   if new.project_id is not null then
-    perform public.log_activity(new.project_id, 'documento', format('Creó el documento "%s"', new.title));
+    insert into activity (project_id, actor_id, kind, message)
+    values (new.project_id, coalesce(auth.uid(), new.created_by), 'documento',
+            format('Creó el documento "%s"%s', new.title, case when new.kind = 'google' then ' (Google Docs)' else '' end));
   end if;
   return new;
 end $$;
@@ -1785,8 +1813,7 @@ create policy documents_select on public.documents for select to authenticated
   using (public.can_view_doc_scope(project_id, event_id));
 -- Crean: en un proyecto o evento, quien lo ve; en el taller en general, docentes y líderes
 create policy documents_insert on public.documents for insert to authenticated
-  with check (case when project_id is null and event_id is null then public.is_staff()
-                   else public.can_view_doc_scope(project_id, event_id) end);
+  with check (public.can_create_document(project_id, event_id));
 create policy documents_update on public.documents for update to authenticated
   using (public.can_edit_document(id)) with check (public.can_view_doc_scope(project_id, event_id));
 create policy documents_delete on public.documents for delete to authenticated

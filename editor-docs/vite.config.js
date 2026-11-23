@@ -26,11 +26,12 @@ export default defineConfig({
     sourcemap: false,
     chunkSizeWarningLimit: 1500,
     rolldownOptions: {
-      input: 'src/index.js',
+      // editor.js: el editor completo · plantillas.js: solo las plantillas (para la lista y Google Docs)
+      input: { editor: 'src/index.js', plantillas: 'src/templates.js' },
       preserveEntrySignatures: 'exports-only',
       output: {
         format: 'es',
-        entryFileNames: 'editor.js',
+        entryFileNames: '[name].js',
         chunkFileNames: 'chunks/[name]-[hash].js',
         assetFileNames: 'assets/[name]-[hash][extname]',
       },

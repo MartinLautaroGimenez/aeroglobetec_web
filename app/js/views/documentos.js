@@ -1,9 +1,24 @@
 // Documentos colaborativos: la lista (del taller, de un proyecto o de un evento) y la galería
 // de plantillas para empezar uno nuevo. El editor está en app/docs/editor.js (se compila
 // desde editor-docs/) y se abre en #/documento/<id>.
-import { esc, icon, name, isStaff, field, openForm, confirmAction, toast, errorMessage, timeAgo, emptyState } from '../ui.js?v=202611230400';
+import { esc, icon, name, isStaff, field, openForm, confirmAction, toast, errorMessage, timeAgo, emptyState } from '../ui.js?v=202611231700';
 
-export const loadEditor = () => import('../../docs/editor.js?v=202611230400');
+export const loadEditor = () => import('../../docs/editor.js?v=202611231700');
+const loadTemplates = () => import('../../docs/plantillas.js?v=202611231700');
+
+// Abre un Google Doc en otra pestaña. La pestaña se abre en el momento del clic (si no, el
+// navegador la bloquea) y recién después se le pone la dirección, cuando el servidor dio acceso.
+export async function openGoogleDoc(api, d) {
+  if (api.demo) { toast('En el modo demo no se crean Google Docs de verdad: probalo con el servidor conectado.'); return; }
+  const w = window.open('', '_blank');
+  try {
+    const r = await api.googleOpen(d.id);
+    if (w) { w.opener = null; w.location.href = r.url; } else location.href = r.url;
+  } catch (e) {
+    w?.close();
+    toast(errorMessage(e), 'error');
+  }
+}
 
 // Las mismas plantillas que editor-docs/src/templates.js (acá solo para dibujar la galería)
 const TEMPLATES = [
@@ -38,12 +53,13 @@ export async function renderDocList(el, ctx, scope) {
   const { api, me } = ctx;
   const staff = isStaff(me);
   const hub = scope.scope === 'all';
-  const [docs, people] = await Promise.all([
+  const [docs, people, google] = await Promise.all([
     api.docs({ projectId: scope.projectId, eventId: scope.eventId }),
     api.profiles().catch(() => ctx.members || []),
+    api.googleStatus().catch(() => ({ conectado: false })),
   ]);
   const person = (id) => people.find(p => p.id === id);
-  const state = { q: '', folder: '', where: hub ? (prefs.get().where || '') : '' };
+  const state = { q: '', folder: '', where: hub ? (prefs.get().where || '') : '', mode: google.conectado ? (prefs.get().mode || (google.demo ? 'aero' : 'google')) : 'aero' };
   const where = (d) => (d.project_id ? d.projects?.name || 'Proyecto' : d.event_id ? d.events?.title || 'Evento' : 'Taller');
   const whereKey = (d) => (d.project_id ? `p:${d.project_id}` : d.event_id ? `e:${d.event_id}` : 'taller');
   const canDelete = (d) => staff || d.created_by === me.id;
@@ -52,7 +68,14 @@ export async function renderDocList(el, ctx, scope) {
   el.innerHTML = `
     <section class="docs-new">
       <div class="docs-new-head"><h2>Empezar un documento nuevo</h2>
+        ${google.conectado ? `<div class="docs-mode" role="radiogroup" aria-label="Dónde se crea">
+          <button type="button" role="radio" data-mode="google" title="Se edita en Google Docs, con la cuenta de Google de cada uno">${icon('external')} Google Docs</button>
+          <button type="button" role="radio" data-mode="aero" title="Se edita adentro de la plataforma">${icon('file')} Editor del taller</button>
+        </div>` : ''}
+        <span class="grow"></span>
         <button class="btn ghost small" id="docs-import">${icon('upload')} Subir un Word (.docx)</button></div>
+      ${!google.conectado && google.configurado && staff ? '<p class="docs-hint">Google Docs está casi listo: falta que un admin conecte la cuenta de Google del taller (ver <code>docs-server/README.md</code>).</p>' : ''}
+      ${google.conectado ? `<p class="docs-hint" data-mode-hint></p>` : ''}
       <div class="docs-templates">${TEMPLATES.map(t => `
         <button class="docs-tpl" data-tpl="${t.id}">
           <span class="docs-thumb ${t.id === 'blanco' ? 'blank' : ''}">${t.id === 'blanco' ? `<span class="plus">${icon('plus')}</span>` : THUMB[t.id]}</span>
@@ -71,6 +94,24 @@ export async function renderDocList(el, ctx, scope) {
   const rows = el.querySelector('#docs-rows');
   const foldersBox = el.querySelector('#docs-folders');
 
+  const drawMode = () => {
+    el.querySelectorAll('[data-mode]').forEach(b => { b.classList.toggle('on', b.dataset.mode === state.mode); b.setAttribute('aria-checked', String(b.dataset.mode === state.mode)); });
+    const hint = el.querySelector('[data-mode-hint]');
+    if (hint) {
+      hint.innerHTML = state.mode === 'google'
+        ? `Se crea en el Drive del taller (${esc(google.cuenta || 'cuenta de Google del taller')}) y se abre en Google Docs. Cada uno entra con su cuenta de Google de la escuela.`
+        : 'Se edita adentro de la plataforma, entre varios a la vez.';
+    }
+  };
+  drawMode();
+  el.querySelector('.docs-mode')?.addEventListener('click', (ev) => {
+    const b = ev.target.closest('[data-mode]');
+    if (!b) return;
+    state.mode = b.dataset.mode;
+    prefs.set({ ...prefs.get(), mode: state.mode });
+    drawMode();
+  });
+
   function draw() {
     const inWhere = docs.filter(d => !state.where || whereKey(d) === state.where);
     const folders = [...new Set(inWhere.map(d => d.folder).filter(Boolean))].sort((a, b) => a.localeCompare(b));
@@ -85,14 +126,15 @@ export async function renderDocList(el, ctx, scope) {
       ${list.map(d => `
         <div class="docs-tr" role="row" data-id="${d.id}">
           <a class="docs-name" href="#/documento/${d.id}" role="cell">
-            <span class="docs-ico">${icon('file')}</span>
-            <span class="grow"><b>${esc(d.title)}</b>${d.folder ? `<small>${icon('folder')}${esc(d.folder)}</small>` : ''}</span>
+            <span class="docs-ico ${d.kind === 'google' ? 'google' : ''}">${icon('file')}</span>
+            <span class="grow"><b>${esc(d.title)}</b>${d.folder || d.kind === 'google' ? `<small>${d.kind === 'google' ? '<span class="docs-gtag">Google Docs</span>' : ''}${d.folder ? `${icon('folder')}${esc(d.folder)}` : ''}</small>` : ''}</span>
             ${d.editable_by === 'staff' ? `<span class="badge gray" title="Lo editan docentes y líderes; el resto lo lee">Solo lectura${canEdit(d) ? ' para estudiantes' : ''}</span>` : ''}
           </a>
           ${hub ? `<span role="cell" class="docs-where"><i style="--c:${esc(d.projects?.color || d.events?.color || '#8a9bb5')}"></i>${esc(where(d))}</span>` : ''}
           <span role="cell" class="muted hide-sm">${esc(name(person(d.created_by)))}</span>
           <span role="cell" class="muted">${timeAgo(d.updated_at)}${d.updated_by && person(d.updated_by) ? ` · ${esc(name(person(d.updated_by)).split(' ')[0])}` : ''}</span>
           <span role="cell" class="docs-actions">
+            ${d.kind === 'google' ? `<button class="icon-btn" data-act="gopen" title="Abrir en Google Docs" aria-label="Abrir en Google Docs">${icon('external')}</button>` : ''}
             ${canEdit(d) ? `<button class="icon-btn" data-act="rename" title="Cambiar el nombre" aria-label="Cambiar el nombre">${icon('edit')}</button>
             <button class="icon-btn" data-act="move" title="Mover a una carpeta" aria-label="Mover a una carpeta">${icon('folder')}</button>` : ''}
             ${canDelete(d) ? `<button class="icon-btn" data-act="delete" title="Borrar" aria-label="Borrar">✕</button>` : ''}
@@ -116,7 +158,7 @@ export async function renderDocList(el, ctx, scope) {
       if (b.dataset.act === 'rename') {
         const data = await openForm({ title: 'Cambiar el nombre', body: field('Nombre', `<input name="title" required maxlength="200" value="${esc(d.title)}"/>`) });
         if (!data) return;
-        await api.updateDoc(d.id, { title: data.title });
+        await api.renameDoc(d, data.title);
         d.title = data.title;
       } else if (b.dataset.act === 'move') {
         const folders = [...new Set(docs.map(x => x.folder).filter(Boolean))];
@@ -125,10 +167,16 @@ export async function renderDocList(el, ctx, scope) {
         await api.updateDoc(d.id, { folder: data.folder });
         d.folder = data.folder;
       } else if (b.dataset.act === 'delete') {
-        if (!await confirmAction('Borrar el documento', `Se borra "${d.title}" con su historial de versiones y sus comentarios. No se puede deshacer.`)) return;
+        const msg = d.kind === 'google'
+          ? `Se saca "${d.title}" de la plataforma y el archivo va a la papelera del Drive del taller (se puede recuperar desde ahí durante 30 días).`
+          : `Se borra "${d.title}" con su historial de versiones y sus comentarios. No se puede deshacer.`;
+        if (!await confirmAction('Borrar el documento', msg)) return;
         await api.deleteDoc(d);
         docs.splice(docs.indexOf(d), 1);
         toast('Documento borrado');
+      } else if (b.dataset.act === 'gopen') {
+        await openGoogleDoc(api, d);
+        return;
       }
       draw();
     } catch (e) { toast(errorMessage(e), 'error'); }
@@ -166,6 +214,14 @@ export async function renderDocList(el, ctx, scope) {
     if (!place) return;
     b.disabled = true;
     try {
+      if (state.mode === 'google') {
+        toast('Creando el documento en Google Docs…');
+        const { googleTemplate } = await loadTemplates();
+        const html = googleTemplate(t.id);
+        const id = await api.createGoogleDoc({ ...place, folder: state.folder || '' }, html ? { html } : {});
+        location.hash = `#/documento/${id}`;
+        return;
+      }
       const [mod, id] = await Promise.all([loadEditor(), api.createDoc({ ...place, folder: state.folder || '' })]);
       const st = mod.stateFromTemplate(t.id);
       if (st) await api.initDocState(id, st);
@@ -185,6 +241,11 @@ export async function renderDocList(el, ctx, scope) {
       if (!place) return;
       toast('Importando el archivo…');
       try {
+        if (state.mode === 'google') {
+          const id = await api.createGoogleDoc({ ...place, folder: state.folder || '' }, { docx: f });
+          location.hash = `#/documento/${id}`;
+          return;
+        }
         const mod = await loadEditor();
         const id = await api.createDoc({ ...place, folder: state.folder || '' });
         const row = { ...place, id };

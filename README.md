@@ -59,6 +59,7 @@ insert into public.admins (email) values ('nombre@alumno.etec.um.edu.ar');
 - **Plantillas** (informe de ensayo, acta de reunión, informe técnico, propuesta) e **importar un Word**.
 - **Descargar** en Word (.docx), PDF, HTML o texto, e imprimir.
 - **Permisos:** quien crea el documento, los docentes y los líderes pueden dejarlo en "solo lectura" para el resto.
+- **Google Docs:** si se conecta una cuenta de Google del taller, al crear un documento se puede elegir **Google Docs** en lugar del editor propio. Se crea en el Drive del taller (con las mismas plantillas, o convirtiendo un Word) y se abre en Google Docs. A cada persona se le da acceso con su mail cuando lo abre desde la plataforma: editor o comentarista según sus permisos. Cómo conectarlo: `docs-server/README.md`, sección Google Docs.
 
 Necesitan el servidor de documentos (`docs-server/`) prendido y su dirección en `DOCS_SERVER_URL` (`app/js/config.js`). Sin eso solo andan en el modo demo, donde se puede probar la edición en simultáneo abriendo el mismo documento en dos pestañas.
 

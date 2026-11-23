@@ -1,7 +1,7 @@
 // Capa de datos con Supabase. Todas las vistas hablan con la base a través de este módulo.
 // Los permisos reales los aplica la base de datos (ver supabase/schema.sql).
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm';
-import { SUPABASE_URL, SUPABASE_KEY, ALLOWED_DOMAINS } from './config.js?v=202611230400';
+import { SUPABASE_URL, SUPABASE_KEY, ALLOWED_DOMAINS, DOCS_SERVER_URL } from './config.js?v=202611231700';
 
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: { persistSession: true, detectSessionInUrl: true, flowType: 'pkce' },
@@ -51,6 +51,32 @@ function fromBytea(v) {
   for (let i = 0; i < out.length; i++) out[i] = parseInt(h.substr(i * 2, 2), 16);
   return out;
 }
+// Servidor de documentos por HTTP (Google Docs). Misma dirección que el wss, con https.
+const DOCS_HTTP = String(DOCS_SERVER_URL || '').replace(/^ws(s?):/, 'http$1:').replace(/\/+$/, '');
+async function docsServer(path, { method = 'GET', body } = {}) {
+  if (!DOCS_HTTP) throw new Error('El servidor de documentos todavía no está configurado.');
+  const token = (await sb.auth.getSession()).data.session?.access_token;
+  let r;
+  try {
+    r = await fetch(`${DOCS_HTTP}/google${path}`, {
+      method,
+      headers: { Authorization: `Bearer ${token}`, ...(body ? { 'Content-Type': 'application/json' } : {}) },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+  } catch {
+    throw new Error('No se pudo conectar con el servidor de documentos.');
+  }
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.error || `Error ${r.status} del servidor de documentos`);
+  return data;
+}
+const fileToBase64 = (file) => new Promise((resolve, reject) => {
+  const fr = new FileReader();
+  fr.onload = () => resolve(String(fr.result).split(',')[1] || '');
+  fr.onerror = () => reject(new Error('No se pudo leer el archivo'));
+  fr.readAsDataURL(file);
+});
+
 // Carpeta del bucket para las imágenes de un documento (usa los permisos de su proyecto o evento)
 const docFolder = (d) => (d.project_id ? `${d.project_id}/documentos/${d.id}` : d.event_id ? `eventos/${d.event_id}/documentos/${d.id}` : `taller/documentos/${d.id}`);
 
@@ -535,8 +561,34 @@ export const api = {
   },
   // Las imágenes no se borran: una copia del documento puede seguir usándolas
   async deleteDoc(d) {
+    // Los Google Docs los borra el servidor: así el archivo también va a la papelera de Drive
+    if (d.kind === 'google') { await docsServer(`/documentos/${d.id}`, { method: 'DELETE' }); return; }
     const r = check(await sb.from('documents').delete().eq('id', d.id).select('id'));
     if (!r.length) throw new Error('Solo quien lo creó, un docente o un líder pueden borrarlo.');
+  },
+  async renameDoc(d, title) {
+    if (d.kind === 'google') { await docsServer(`/documentos/${d.id}`, { method: 'PATCH', body: { title } }); return; }
+    await this.updateDoc(d.id, { title });
+  },
+
+  // ---------- Google Docs (los crea el servidor en el Drive de la cuenta del taller) ----------
+  async googleStatus() {
+    if (!DOCS_HTTP) return { configurado: false, conectado: false };
+    return docsServer('/estado');
+  },
+  // source: { html } (plantilla) o { docx: File } (Word que se convierte)
+  async createGoogleDoc(row, source = {}) {
+    const body = { ...row };
+    if (source.html) body.html = source.html;
+    if (source.docx) {
+      if (source.docx.size > 18 * 1024 * 1024) throw new Error('El archivo es demasiado grande (máximo 18 MB).');
+      body.docx = await fileToBase64(source.docx);
+    }
+    return (await docsServer('/documentos', { method: 'POST', body })).id;
+  },
+  // Le da acceso en Google a quien lo abre (según sus permisos) y devuelve el enlace
+  async googleOpen(id) {
+    return docsServer(`/documentos/${id}/acceso`, { method: 'POST' });
   },
   async docVersions(id) {
     const rows = check(await sb.from('document_versions').select('id, label, auto, created_by, created_at, profiles(full_name, email)')

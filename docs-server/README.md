@@ -127,3 +127,44 @@ npm install && npm run dev
 ```
 
 `npm run dev` arranca **sin login ni base de datos** (los documentos quedan en memoria). Es solo para probar. En producción no arranca así.
+
+## Google Docs (opcional)
+
+Además del editor propio, la plataforma puede crear **Google Docs de verdad**. Se guardan en el Drive de una **cuenta de Google del taller** (conviene una cuenta del taller y no la de una persona: así los documentos no se pierden si alguien se va). El servidor actúa en nombre de esa cuenta:
+
+- Crea el documento en `AeroGlobETec · Documentos / <proyecto o evento>`, en blanco, desde una plantilla o convirtiendo un Word.
+- Cuando alguien lo abre desde la plataforma, lo comparte con su mail: **editor** si puede editar, **comentarista** si es de solo lectura. No le llega ningún mail de Google.
+- Si se borra desde la plataforma, el archivo va a la papelera de ese Drive (se recupera durante 30 días).
+
+Usa solo el permiso `drive.file`: la app ve únicamente los archivos que crea ella, no el resto del Drive.
+
+### 1. Google Cloud
+
+En [Google Cloud Console](https://console.cloud.google.com/), en el mismo proyecto del login con Google o en uno nuevo:
+
+1. **APIs y servicios → Biblioteca**: habilitá **Google Drive API**.
+2. **Pantalla de consentimiento de OAuth**:
+   - Si la cuenta del taller es de la escuela (Google Workspace): elegí **Interno**.
+   - Si es una cuenta común (Gmail): elegí **Externo** y después tocá **Publicar app**. Con `drive.file` no hace falta que Google la verifique. Si queda en "Prueba", Google corta el acceso a los 7 días.
+3. **Credenciales → Crear credenciales → ID de cliente de OAuth → Aplicación web**. En **URIs de redireccionamiento autorizados** poné la dirección del servidor + `/google/callback`:
+   - con el instalador de un solo comando: `https://TU-DOMINIO/docs-ws/google/callback`
+   - con el servidor solo: `https://docs.tudominio.com/google/callback`
+4. Copiá el **ID de cliente** y el **secreto**: van en `GOOGLE_CLIENT_ID` y `GOOGLE_CLIENT_SECRET` del `.env` (el instalador los pregunta). `GOOGLE_REDIRECT_URI` tiene que ser exactamente la misma dirección del paso 3, y `GOOGLE_SETUP_KEY` una clave larga cualquiera.
+
+### 2. Conectar la cuenta del taller (una sola vez)
+
+Entrá a Google con la cuenta del taller y abrí:
+
+```
+https://TU-DOMINIO/docs-ws/google/conectar?clave=GOOGLE_SETUP_KEY
+```
+
+Aceptá los permisos (tildá el de Google Drive). Listo: en **Documentos** de la plataforma aparece la opción **Google Docs** al crear. En `/salud` se ve `"google":{"configurado":true,"conectado":true}`.
+
+La conexión queda en `GOOGLE_STATE_FILE` (con el instalador, `/var/lib/aeroglobetec-docs/google.json`; con Docker, en el volumen `datos`). Para cambiar de cuenta, volvé a abrir el enlace con la otra.
+
+### A tener en cuenta
+
+- Cada persona tiene que entrar a Google con **el mismo mail** con el que entra a la plataforma: es al que se le comparte el documento.
+- Si la escuela no deja compartir archivos de Drive con cuentas de afuera del dominio, los mails de afuera invitados a la plataforma no van a poder abrir los Google Docs.
+- Si alguien sale de un proyecto, sigue teniendo acceso en Google a los documentos que ya abrió hasta que se lo saquen desde Drive (la plataforma da acceso, pero no lo quita).

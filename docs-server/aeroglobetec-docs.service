@@ -18,6 +18,9 @@ NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
+# Carpeta propia donde se guarda la conexión con la cuenta de Google del taller (google.json)
+StateDirectory=aeroglobetec-docs
+StateDirectoryMode=0700
 
 [Install]
 WantedBy=multi-user.target

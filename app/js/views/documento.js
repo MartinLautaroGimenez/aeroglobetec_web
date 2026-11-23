@@ -1,8 +1,8 @@
 // Abre un documento en el editor colaborativo (pantalla completa, encima de la plataforma).
 // El editor vive en app/docs/editor.js; acá se le pasan la sesión, los permisos y la API.
-import { esc, name, isStaff, toast, errorMessage } from '../ui.js?v=202611230400';
-import { DOCS_SERVER_URL } from '../config.js?v=202611230400';
-import { loadEditor } from './documentos.js?v=202611230400';
+import { esc, name, isStaff, toast, errorMessage, icon, fmtDateTime } from '../ui.js?v=202611231700';
+import { DOCS_SERVER_URL } from '../config.js?v=202611231700';
+import { loadEditor, openGoogleDoc } from './documentos.js?v=202611231700';
 
 let open = null;   // { id, close }
 
@@ -11,7 +11,7 @@ function ensureCss() {
   const l = document.createElement('link');
   l.id = 'docs-css';
   l.rel = 'stylesheet';
-  l.href = 'css/docs.css?v=202611230400';
+  l.href = 'css/docs.css?v=202611231700';
   document.head.appendChild(l);
 }
 
@@ -31,6 +31,8 @@ export async function renderDocumento(el, ctx) {
     : doc.event_id
       ? { label: doc.events?.title || 'Evento', href: `#/evento/${doc.event_id}/documentos` }
       : { label: 'Documentos del taller', href: '#/documentos' };
+
+  if (doc.kind === 'google') { await renderGoogleDoc(el, ctx, doc, scope); return; }
 
   if (!api.demo && !DOCS_SERVER_URL) {
     el.innerHTML = `<div class="page"><div class="empty"><strong>Los documentos todavía no están activados</strong>
@@ -97,4 +99,49 @@ export async function renderDocumento(el, ctx) {
   const onHash = () => { if (!location.hash.startsWith(`#/documento/${id}`)) close(); };
   window.addEventListener('hashchange', onHash);
   open = { id, close };
+}
+
+// Google Doc: se edita en Google. Acá se le da acceso a la persona, se muestra la vista previa
+// (Google no deja incrustar el editor, solo la vista de lectura) y el botón para abrirlo.
+async function renderGoogleDoc(el, ctx, doc, scope) {
+  const { api } = ctx;
+  el.innerHTML = `
+    <div class="page gdoc-page">
+      <header class="project-head">
+        <div>
+          <a class="crumb" href="${esc(scope.href)}">← ${esc(scope.label)}</a>
+          <h1><span class="docs-ico google">${icon('file')}</span>${esc(doc.title)}</h1>
+          <p class="muted">Google Docs${doc.folder ? ` · ${esc(doc.folder)}` : ''} · último cambio ${esc(fmtDateTime(doc.updated_at))}</p>
+        </div>
+        <div class="head-actions">
+          <a class="btn primary" id="gdoc-open" href="#" target="_blank" rel="noopener noreferrer" aria-disabled="true">${icon('external')} Abrir en Google Docs</a>
+        </div>
+      </header>
+      <p class="gdoc-note" id="gdoc-note">Dándote acceso al documento…</p>
+      <div class="gdoc-frame" id="gdoc-frame"></div>
+    </div>`;
+  const btn = el.querySelector('#gdoc-open');
+  const note = el.querySelector('#gdoc-note');
+  const frame = el.querySelector('#gdoc-frame');
+  btn.addEventListener('click', (ev) => {
+    if (btn.getAttribute('aria-disabled') === 'true') { ev.preventDefault(); openGoogleDoc(api, doc); }
+  });
+
+  if (api.demo) {
+    note.innerHTML = 'En el <b>modo demo</b> no se crean Google Docs de verdad. Con el servidor de documentos conectado, este botón abre el documento en Google Docs con tu cuenta de la escuela.';
+    frame.innerHTML = `<div class="gdoc-empty">${icon('file')}<p>Acá se ve la vista previa del documento.</p></div>`;
+    return;
+  }
+  try {
+    const r = await api.googleOpen(doc.id);
+    btn.href = r.url;
+    btn.removeAttribute('aria-disabled');
+    note.innerHTML = `${r.rol === 'commenter' ? 'Podés leerlo y comentar: lo editan docentes y estudiantes líderes.' : 'Podés editarlo.'}
+      Entrá a Google con <b>${esc(r.email)}</b>; si estás con otra cuenta, Google te va a pedir acceso.`;
+    frame.innerHTML = `<iframe src="${esc(r.preview)}" title="Vista previa de ${esc(doc.title)}" loading="lazy"></iframe>`;
+  } catch (e) {
+    note.classList.add('error');
+    note.textContent = errorMessage(e);
+    frame.innerHTML = '';
+  }
 }

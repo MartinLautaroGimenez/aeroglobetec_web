@@ -17,6 +17,7 @@
 #   RAMA=main MODO=local SUPABASE_SERVICE_KEY=sb_secret_... NO_INTERACTIVO=1 bash instalar.sh
 #   MODO: local (http, para probar en la red) · dominio (https automático) · cloudflare (Cloudflare Tunnel)
 #   Otras: DOMINIO, CF_TUNNEL_TOKEN, SUPABASE_DB_URL (para cargar schema.sql), REPO_URL
+#   Google Docs (opcional): GOOGLE_CLIENT_ID y GOOGLE_CLIENT_SECRET (ver docs-server/README.md)
 #   Otro proyecto de Supabase (por ejemplo uno de prueba): SUPABASE_URL y SUPABASE_ANON_KEY (la publishable key).
 #   Sin eso se usa el del taller (el de app/js/config.js).
 # =====================================================================
@@ -119,6 +120,25 @@ EOF
   fi
   [ -n "${SUPABASE_SERVICE_KEY:-}" ] || falla "Sin la secret key de Supabase el servidor de documentos no puede guardar."
 
+  # Google Docs (opcional): se reusa lo que ya estaba configurado
+  local g_id="" g_secret="" g_key=""
+  if [ -f "$envf" ]; then
+    g_id=$(sed -n 's/^GOOGLE_CLIENT_ID=//p' "$envf"); g_secret=$(sed -n 's/^GOOGLE_CLIENT_SECRET=//p' "$envf"); g_key=$(sed -n 's/^GOOGLE_SETUP_KEY=//p' "$envf")
+  fi
+  GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-$g_id}
+  GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-$g_secret}
+  if [ -z "$GOOGLE_CLIENT_ID" ] && tty_ok; then
+    echo "  Google Docs (opcional): pegá el Client ID del cliente OAuth de Google Cloud (Enter para saltear; ver docs-server/README.md)." > /dev/tty
+    preguntar GOOGLE_CLIENT_ID "Client ID de Google" ""
+  fi
+  if [ -n "$GOOGLE_CLIENT_ID" ] && [ -z "$GOOGLE_CLIENT_SECRET" ]; then
+    preguntar GOOGLE_CLIENT_SECRET "Client secret de Google (no se ve al escribir)" "" secreto
+  fi
+  GOOGLE_SETUP_KEY=${GOOGLE_SETUP_KEY:-${g_key:-$(head -c 18 /dev/urandom | base64 | tr -d '/+=')}}
+  GOOGLE_REDIRECT="$(url_publica)/docs-ws/google/callback"
+  [ "$MODO" = local ] && GOOGLE_REDIRECT="http://localhost/docs-ws/google/callback"
+  install -d -m 0700 -o "$USUARIO" -g "$USUARIO" /var/lib/aeroglobetec-docs
+
   umask 027
   cat > "$envf" <<EOF
 # Generado por deploy/instalar.sh ($(date '+%F %R')). Se reescribe al actualizar.
@@ -131,6 +151,11 @@ SUPABASE_SERVICE_KEY=$SUPABASE_SERVICE_KEY
 ALLOWED_ORIGINS=$(origenes)
 VERSION_EVERY_MIN=30
 MAX_AUTO_VERSIONS=60
+GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
+GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
+GOOGLE_REDIRECT_URI=$GOOGLE_REDIRECT
+GOOGLE_SETUP_KEY=$GOOGLE_SETUP_KEY
+GOOGLE_STATE_FILE=/var/lib/aeroglobetec-docs/google.json
 EOF
   umask 022
   chown root:"$USUARIO" "$envf"
@@ -351,12 +376,29 @@ EOF
   fi
 }
 
-resumen() {
-  local url
+url_publica() {
   case "$MODO" in
-    local) url="http://$(hostname -I 2>/dev/null | awk '{print $1}')" ;;
-    *) url="https://$DOMINIO" ;;
+    local) echo "http://$(hostname -I 2>/dev/null | awk '{print $1}')" ;;
+    *) echo "https://$DOMINIO" ;;
   esac
+}
+
+resumen() {
+  local url google_txt=""
+  url=$(url_publica)
+  if [ -n "${GOOGLE_CLIENT_ID:-}" ]; then
+    if curl -fsS "http://127.0.0.1:$PUERTO_DOCS/salud" 2>/dev/null | grep -q '"conectado":true'; then
+      google_txt="${V}Google Docs:${N} conectado."
+    else
+      local base=$url
+      [ "$MODO" = local ] && base="http://localhost"
+      google_txt="${B}Google Docs:${N} falta conectar la cuenta de Google del taller. Abrí, con esa cuenta:
+    $base/docs-ws/google/conectar?clave=$GOOGLE_SETUP_KEY
+  (En Google Cloud, el cliente OAuth tiene que tener como URI de redireccionamiento: $GOOGLE_REDIRECT)"
+      [ "$MODO" = local ] && google_txt="$google_txt
+  En modo local Google solo acepta localhost: abrilo desde el CT o con un túnel SSH (ssh -L 80:localhost:80 root@IP-del-CT)."
+    fi
+  fi
   cat <<EOF
 
 ${V}${B}✓ Listo${N}
@@ -372,6 +414,8 @@ $( [ "${BASE_OK:-}" = 1 ] || echo "  · SQL Editor: corré supabase/schema.sql (
 $( [ "$MODO" = local ] && echo "
 ${A}Modo local:${N} sin https el login con link al mail y con Google puede fallar, y la app no se puede instalar.
 Para usarlo de verdad, volvé a correr con MODO=dominio o MODO=cloudflare.")
+
+${google_txt}
 
 ${B}Para actualizar:${N}   aeroglobetec-actualizar
 ${B}Ver qué pasa:${N}      $(hay_systemd && echo "journalctl -u aeroglobetec-docs -f    ·    journalctl -u caddy -f" || echo "tail -f /var/log/aeroglobetec-docs.log")

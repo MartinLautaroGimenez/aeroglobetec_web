@@ -59,3 +59,20 @@ export const TEMPLATES = [
       <h2>Equipo</h2><p></p>`,
   },
 ];
+
+// Las mismas plantillas para Google Docs: Google convierte el HTML, pero no entiende los
+// bloques propios del editor (salto de página, índice, lista de tareas). Se pasan a algo equivalente.
+export function forGoogle(html) {
+  return '<html><body>' + String(html)
+    .replace(/<div data-page-break><\/div>/g, '<p style="page-break-before:always"></p>')
+    .replace(/<div data-toc><\/div>/g, '<p><em>Índice: en Google Docs, Insertar → Índice.</em></p>')
+    .replace(/<ul data-type="taskList">/g, '<ul style="list-style:none">')
+    .replace(/<li data-type="taskItem" data-checked="true"><p>/g, '<li><p>☑ ')
+    .replace(/<li data-type="taskItem" data-checked="false"><p>/g, '<li><p>☐ ')
+    + '</body></html>';
+}
+
+export const googleTemplate = (id) => {
+  const t = TEMPLATES.find(x => x.id === id);
+  return t && t.id !== 'blanco' ? forGoogle(t.html()) : null;
+};

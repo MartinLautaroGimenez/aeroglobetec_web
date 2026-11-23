@@ -927,6 +927,21 @@ export const api = {
     db.docVersions = db.docVersions.filter(x => x.id !== versionId);
     save();
   },
+  async renameDoc(d, title) { await this.updateDoc(d.id, { title }); },
+  // Google Docs en el demo: se crea la fila, pero no hay un archivo de verdad en Google
+  async googleStatus() { return { configurado: true, conectado: true, cuenta: 'taller.aeroglobe@etec.um.edu.ar', demo: true }; },
+  async createGoogleDoc(row) {
+    const id = await this.createDoc(row);
+    const d = docsList().find(x => x.id === id);
+    Object.assign(d, { kind: 'google', google_id: `demo-${id.slice(0, 8)}`, google_url: '' });
+    save();
+    return id;
+  },
+  async googleOpen(id) {
+    const d = docsList().find(x => x.id === id);
+    if (!d || !canSeeDoc(d)) deny();
+    return { url: '', preview: '', demo: true, email: meP().email, rol: canEditDoc(d) ? 'writer' : 'commenter', title: d.title };
+  },
   async docAccessToken() { return null; },
   async uploadDocImage(_doc, file) { return demoImage(file); },
 };
