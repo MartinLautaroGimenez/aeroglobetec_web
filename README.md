@@ -125,6 +125,16 @@ Después abrí:
 - `http://localhost:8765/app/`: plataforma real, conectada a Supabase.
 - `http://localhost:8765/app/?demo`: **modo demo**, con datos de ejemplo guardados solo en el navegador. Sirve para probar la interfaz sin login. Arriba se puede cambiar de usuario para ver la app como docente, líder o estudiante.
 
+## Probar en un CT de Proxmox (opcional)
+
+Para tener la web y la plataforma andando en un contenedor propio (Debian o Ubuntu), como root:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/MartinLautaroGimenez/aeroglobetec_web/main/deploy/instalar.sh | bash
+```
+
+Instala Caddy, publica la web con https (dominio propio o Cloudflare Tunnel) y puede usar otro proyecto de Supabase para probar. Para actualizar después: `aeroglobetec-actualizar`.
+
 ## Publicar
 
 La web se publica en el servidor de la escuela: **https://aeroglobe.wetec.um.edu.ar**. No hace falta compilar nada; se suben los archivos tal cual, a la raíz del sitio:

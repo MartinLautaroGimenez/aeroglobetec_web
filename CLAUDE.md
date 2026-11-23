@@ -40,6 +40,8 @@ app/
                         milestones, ensayos, team, files, inventory, performance, activity
   js/views/documentos.js  lista de documentos (links a Google): hub #/documentos y pestañas de proyecto/evento
   js/views/documento.js   página de un documento (#/documento/<id>): vista previa + botón "Abrir"
+deploy/instalar.sh      publica web + plataforma en un CT Debian/Ubuntu con Caddy (https por dominio o Cloudflare
+                        Tunnel, opción de otro proyecto de Supabase). Re-ejecutable = `aeroglobetec-actualizar`.
 supabase/
   schema.sql            TODA la base: tipos, tablas, RLS, triggers, funciones, buckets. Idempotente.
   *.sql                 scripts de carga puntuales (textos borrador, imágenes, presentación Dron Rover,
