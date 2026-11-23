@@ -1,10 +1,10 @@
 // Documentos colaborativos: la lista (del taller, de un proyecto o de un evento) y la galería
 // de plantillas para empezar uno nuevo. El editor está en app/docs/editor.js (se compila
 // desde editor-docs/) y se abre en #/documento/<id>.
-import { esc, icon, name, isStaff, field, openForm, confirmAction, toast, errorMessage, timeAgo, emptyState } from '../ui.js?v=202611231700';
+import { esc, icon, name, isStaff, field, openForm, confirmAction, toast, errorMessage, timeAgo, emptyState } from '../ui.js?v=202611241000';
 
-export const loadEditor = () => import('../../docs/editor.js?v=202611231700');
-const loadTemplates = () => import('../../docs/plantillas.js?v=202611231700');
+export const loadEditor = () => import('../../docs/editor.js?v=202611241000');
+const loadTemplates = () => import('../../docs/plantillas.js?v=202611241000');
 
 // Abre un Google Doc en otra pestaña. La pestaña se abre en el momento del clic (si no, el
 // navegador la bloquea) y recién después se le pone la dirección, cuando el servidor dio acceso.
@@ -33,6 +33,27 @@ const THUMB = {
   acta: '<i class="t h"></i><i class="t s"></i><i class="t"></i><i class="t l"></i><i class="t m"></i><i class="chk"></i><i class="chk"></i><i class="t m"></i>',
   'informe-tecnico': '<i class="t h c"></i><i class="t s c"></i><i class="sp"></i><i class="t m"></i><i class="t l"></i><i class="t l"></i><i class="t m"></i><i class="t l"></i>',
   propuesta: '<i class="t h"></i><i class="t l"></i><i class="t"></i><i class="t m"></i><i class="grid"></i><i class="t l"></i><i class="t"></i>',
+};
+
+// Links pegados a mano: qué es, según la dirección
+export function linkKind(url) {
+  let u;
+  try { u = new URL(url); } catch { return 'Link'; }
+  const host = u.hostname.replace(/^www\./, '');
+  if (host === 'docs.google.com') {
+    if (u.pathname.startsWith('/document')) return 'Google Docs';
+    if (u.pathname.startsWith('/spreadsheets')) return 'Google Sheets';
+    if (u.pathname.startsWith('/presentation')) return 'Google Slides';
+    if (u.pathname.startsWith('/forms')) return 'Google Forms';
+    return 'Google';
+  }
+  if (host === 'drive.google.com') return 'Google Drive';
+  if (host === 'canva.com') return 'Canva';
+  return 'Link';
+}
+const cleanLink = (raw) => {
+  const v = String(raw || '').trim();
+  try { const u = new URL(v); return u.protocol === 'https:' ? u.href : null; } catch { return null; }
 };
 
 const prefs = { get: () => { try { return JSON.parse(localStorage.getItem('age-docs-view') || '{}'); } catch { return {}; } }, set: (v) => { try { localStorage.setItem('age-docs-view', JSON.stringify(v)); } catch { /* nada */ } } };
@@ -73,6 +94,7 @@ export async function renderDocList(el, ctx, scope) {
           <button type="button" role="radio" data-mode="aero" title="Se edita adentro de la plataforma">${icon('file')} Editor del taller</button>
         </div>` : ''}
         <span class="grow"></span>
+        <button class="btn ghost small" id="docs-link">${icon('link')} Pegar link de Google</button>
         <button class="btn ghost small" id="docs-import">${icon('upload')} Subir un Word (.docx)</button></div>
       ${!google.conectado && google.configurado && staff ? '<p class="docs-hint">Google Docs está casi listo: falta que un admin conecte la cuenta de Google del taller (ver <code>docs-server/README.md</code>).</p>' : ''}
       ${google.conectado ? `<p class="docs-hint" data-mode-hint></p>` : ''}
@@ -125,9 +147,9 @@ export async function renderDocList(el, ctx, scope) {
       <div class="docs-tr head" role="row"><span role="columnheader">Nombre</span>${hub ? '<span role="columnheader">Dónde</span>' : ''}<span role="columnheader" class="hide-sm">Creado por</span><span role="columnheader">Último cambio</span><span></span></div>
       ${list.map(d => `
         <div class="docs-tr" role="row" data-id="${d.id}">
-          <a class="docs-name" href="#/documento/${d.id}" role="cell">
-            <span class="docs-ico ${d.kind === 'google' ? 'google' : ''}">${icon('file')}</span>
-            <span class="grow"><b>${esc(d.title)}</b>${d.folder || d.kind === 'google' ? `<small>${d.kind === 'google' ? '<span class="docs-gtag">Google Docs</span>' : ''}${d.folder ? `${icon('folder')}${esc(d.folder)}` : ''}</small>` : ''}</span>
+          <a class="docs-name" role="cell" ${d.kind === 'link' ? `href="${esc(d.link_url)}" target="_blank" rel="noopener noreferrer" title="Abrir en otra pestaña"` : `href="#/documento/${d.id}"`}>
+            <span class="docs-ico ${d.kind !== 'aero' && d.kind ? 'google' : ''}">${icon(d.kind === 'link' ? 'link' : 'file')}</span>
+            <span class="grow"><b>${esc(d.title)}</b>${d.folder || (d.kind && d.kind !== 'aero') ? `<small>${d.kind === 'google' ? '<span class="docs-gtag">Google Docs</span>' : d.kind === 'link' ? `<span class="docs-gtag">${esc(linkKind(d.link_url))}</span>` : ''}${d.folder ? `${icon('folder')}${esc(d.folder)}` : ''}</small>` : ''}</span>
             ${d.editable_by === 'staff' ? `<span class="badge gray" title="Lo editan docentes y líderes; el resto lo lee">Solo lectura${canEdit(d) ? ' para estudiantes' : ''}</span>` : ''}
           </a>
           ${hub ? `<span role="cell" class="docs-where"><i style="--c:${esc(d.projects?.color || d.events?.color || '#8a9bb5')}"></i>${esc(where(d))}</span>` : ''}
@@ -135,6 +157,7 @@ export async function renderDocList(el, ctx, scope) {
           <span role="cell" class="muted">${timeAgo(d.updated_at)}${d.updated_by && person(d.updated_by) ? ` · ${esc(name(person(d.updated_by)).split(' ')[0])}` : ''}</span>
           <span role="cell" class="docs-actions">
             ${d.kind === 'google' ? `<button class="icon-btn" data-act="gopen" title="Abrir en Google Docs" aria-label="Abrir en Google Docs">${icon('external')}</button>` : ''}
+            ${d.kind === 'link' && canEdit(d) ? `<button class="icon-btn" data-act="relink" title="Cambiar el link" aria-label="Cambiar el link">${icon('link')}</button>` : ''}
             ${canEdit(d) ? `<button class="icon-btn" data-act="rename" title="Cambiar el nombre" aria-label="Cambiar el nombre">${icon('edit')}</button>
             <button class="icon-btn" data-act="move" title="Mover a una carpeta" aria-label="Mover a una carpeta">${icon('folder')}</button>` : ''}
             ${canDelete(d) ? `<button class="icon-btn" data-act="delete" title="Borrar" aria-label="Borrar">✕</button>` : ''}
@@ -167,13 +190,22 @@ export async function renderDocList(el, ctx, scope) {
         await api.updateDoc(d.id, { folder: data.folder });
         d.folder = data.folder;
       } else if (b.dataset.act === 'delete') {
-        const msg = d.kind === 'google'
+        const msg = d.kind === 'link'
+          ? `Se saca "${d.title}" de la plataforma. El documento sigue en Google, no se borra.`
+          : d.kind === 'google'
           ? `Se saca "${d.title}" de la plataforma y el archivo va a la papelera del Drive del taller (se puede recuperar desde ahí durante 30 días).`
           : `Se borra "${d.title}" con su historial de versiones y sus comentarios. No se puede deshacer.`;
         if (!await confirmAction('Borrar el documento', msg)) return;
         await api.deleteDoc(d);
         docs.splice(docs.indexOf(d), 1);
         toast('Documento borrado');
+      } else if (b.dataset.act === 'relink') {
+        const data = await openForm({ title: 'Cambiar el link', body: field('Link', `<input name="url" required type="url" value="${esc(d.link_url)}"/>`) });
+        if (!data) return;
+        const url = cleanLink(data.url);
+        if (!url) { toast('El link tiene que empezar con https://', 'error'); return; }
+        await api.updateDoc(d.id, { link_url: url });
+        d.link_url = url;
       } else if (b.dataset.act === 'gopen') {
         await openGoogleDoc(api, d);
         return;
@@ -228,6 +260,49 @@ export async function renderDocList(el, ctx, scope) {
       location.hash = `#/documento/${id}`;
     } catch (e) { toast(errorMessage(e), 'error'); }
     finally { b.disabled = false; }
+  });
+
+  // ---------- Pegar un link de Google (u otro) ----------
+  el.querySelector('#docs-link').addEventListener('click', async () => {
+    let opts = [['', '']];
+    if (hub) {
+      const [projects, events] = await Promise.all([api.projects().catch(() => []), api.events().catch(() => [])]);
+      const mine = (list) => list.filter(x => staff || (x.project_members || x.event_members || []).some(m => m.user_id === me.id));
+      opts = [
+        ...mine(projects.filter(p => !p.archived)).map(p => [`p:${p.id}`, `Proyecto · ${p.name}`]),
+        ...mine(events).map(e => [`e:${e.id}`, `Evento · ${e.title}`]),
+        ...(staff ? [['taller', 'Todo el taller']] : []),
+      ];
+      if (!opts.length) { toast('Para agregar un link tenés que estar en un proyecto o en un evento.', 'error'); return; }
+    }
+    const last = prefs.get().place;
+    const data = await openForm({
+      title: 'Pegar link de Google',
+      submit: 'Agregar',
+      body: `${field('Link', '<input name="url" required type="url" placeholder="https://docs.google.com/document/d/…"/>', 'Un Google Doc, Sheet, Slides, una carpeta de Drive, un Canva…')}
+        ${field('Nombre', '<input name="title" required maxlength="200" placeholder="Ej.: Presupuesto del CATE"/>')}
+        ${hub ? field('Quién lo ve', `<select name="place">${opts.map(([v, l]) => `<option value="${esc(v)}" ${v === (state.where || last) ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>`, 'Solo lo ven en la plataforma los integrantes de ese proyecto o evento (y los docentes y líderes).') : ''}
+        <p class="hint">Acordate de compartirlo también en Google (botón <b>Compartir</b>) con esas personas, o con "Cualquier persona de la escuela que tenga el vínculo".</p>`,
+      onOpen: (dlg) => {
+        const url = dlg.querySelector('[name=url]'), title = dlg.querySelector('[name=title]');
+        url.addEventListener('change', () => { if (!title.value && cleanLink(url.value)) title.value = linkKind(url.value) === 'Link' ? '' : `${linkKind(url.value)} sin nombre`; });
+      },
+    });
+    if (!data) return;
+    const url = cleanLink(data.url);
+    if (!url) { toast('El link tiene que empezar con https://', 'error'); return; }
+    let place = { project_id: scope.projectId || null, event_id: scope.eventId || null };
+    if (hub) {
+      prefs.set({ ...prefs.get(), place: data.place });
+      const [kind, id] = data.place.split(':');
+      place = { project_id: kind === 'p' ? id : null, event_id: kind === 'e' ? id : null };
+    }
+    try {
+      const id = await api.createDoc({ ...place, title: data.title, folder: state.folder || '', kind: 'link', link_url: url });
+      docs.unshift({ id, ...place, title: data.title, folder: state.folder || '', kind: 'link', link_url: url, created_by: me.id, updated_by: me.id, updated_at: new Date().toISOString(), editable_by: 'equipo', projects: null, events: null });
+      toast('Link agregado');
+      ctx.reload ? ctx.reload() : draw();
+    } catch (e) { toast(errorMessage(e), 'error'); }
   });
 
   el.querySelector('#docs-import').addEventListener('click', () => {

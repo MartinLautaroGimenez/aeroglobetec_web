@@ -1677,9 +1677,10 @@ create index if not exists documents_event_idx on public.documents(event_id);
 alter table public.documents add column if not exists kind text not null default 'aero';
 alter table public.documents add column if not exists google_id text;
 alter table public.documents add column if not exists google_url text;
-do $$ begin
-  alter table public.documents add constraint documents_kind_check check (kind in ('aero', 'google'));
-exception when duplicate_object then null; end $$;
+-- Links pegados a mano (un Google Doc, Sheet, Slides o lo que sea de cada uno): kind = 'link'
+alter table public.documents add column if not exists link_url text check (link_url is null or link_url ~ '^https://');
+alter table public.documents drop constraint if exists documents_kind_check;
+alter table public.documents add constraint documents_kind_check check (kind in ('aero', 'google', 'link'));
 create unique index if not exists documents_google_idx on public.documents(google_id) where google_id is not null;
 
 -- Estado actual del documento (Yjs). Lo escribe el servidor de documentos.
@@ -1750,8 +1751,11 @@ begin
   -- El servidor de documentos (service key, sin usuario) solo actualiza la fecha y el autor del último cambio
   if auth.uid() is null then return new; end if;
   -- El enlace a Google lo pone solo el servidor: así nadie puede apuntar una fila a un archivo ajeno
-  if tg_op = 'INSERT' and (new.kind <> 'aero' or new.google_id is not null or new.google_url is not null) then
+  if tg_op = 'INSERT' and (new.kind = 'google' or new.google_id is not null or new.google_url is not null) then
     raise exception 'Los Google Docs los crea el servidor de documentos';
+  end if;
+  if (new.kind = 'link') <> (new.link_url is not null) then
+    raise exception 'Un link tiene que tener su dirección (y solo los links la llevan)';
   end if;
   if tg_op = 'UPDATE' and (new.kind is distinct from old.kind or new.google_id is distinct from old.google_id
                            or new.google_url is distinct from old.google_url) then
@@ -1788,7 +1792,8 @@ begin
   if new.project_id is not null then
     insert into activity (project_id, actor_id, kind, message)
     values (new.project_id, coalesce(auth.uid(), new.created_by), 'documento',
-            format('Creó el documento "%s"%s', new.title, case when new.kind = 'google' then ' (Google Docs)' else '' end));
+            format('%s "%s"%s', case when new.kind = 'link' then 'Agregó el link' else 'Creó el documento' end, new.title,
+                   case when new.kind = 'google' then ' (Google Docs)' else '' end));
   end if;
   return new;
 end $$;

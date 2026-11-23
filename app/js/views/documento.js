@@ -1,8 +1,8 @@
 // Abre un documento en el editor colaborativo (pantalla completa, encima de la plataforma).
 // El editor vive en app/docs/editor.js; acá se le pasan la sesión, los permisos y la API.
-import { esc, name, isStaff, toast, errorMessage, icon, fmtDateTime } from '../ui.js?v=202611231700';
-import { DOCS_SERVER_URL } from '../config.js?v=202611231700';
-import { loadEditor, openGoogleDoc } from './documentos.js?v=202611231700';
+import { esc, name, isStaff, toast, errorMessage, icon, fmtDateTime, embedUrl } from '../ui.js?v=202611241000';
+import { DOCS_SERVER_URL } from '../config.js?v=202611241000';
+import { loadEditor, openGoogleDoc, linkKind } from './documentos.js?v=202611241000';
 
 let open = null;   // { id, close }
 
@@ -11,7 +11,7 @@ function ensureCss() {
   const l = document.createElement('link');
   l.id = 'docs-css';
   l.rel = 'stylesheet';
-  l.href = 'css/docs.css?v=202611231700';
+  l.href = 'css/docs.css?v=202611241000';
   document.head.appendChild(l);
 }
 
@@ -33,6 +33,7 @@ export async function renderDocumento(el, ctx) {
       : { label: 'Documentos del taller', href: '#/documentos' };
 
   if (doc.kind === 'google') { await renderGoogleDoc(el, ctx, doc, scope); return; }
+  if (doc.kind === 'link') { renderLink(el, doc, scope); return; }
 
   if (!api.demo && !DOCS_SERVER_URL) {
     el.innerHTML = `<div class="page"><div class="empty"><strong>Los documentos todavía no están activados</strong>
@@ -144,4 +145,24 @@ async function renderGoogleDoc(el, ctx, doc, scope) {
     note.textContent = errorMessage(e);
     frame.innerHTML = '';
   }
+}
+
+// Link pegado a mano: vista previa (si Google la deja) y botón para abrirlo
+function renderLink(el, doc, scope) {
+  const preview = embedUrl(doc.link_url);
+  el.innerHTML = `
+    <div class="page gdoc-page">
+      <header class="project-head">
+        <div>
+          <a class="crumb" href="${esc(scope.href)}">← ${esc(scope.label)}</a>
+          <h1><span class="docs-ico google">${icon('link')}</span>${esc(doc.title)}</h1>
+          <p class="muted">${esc(linkKind(doc.link_url))}${doc.folder ? ` · ${esc(doc.folder)}` : ''} · agregado ${esc(fmtDateTime(doc.created_at))}</p>
+        </div>
+        <div class="head-actions">
+          <a class="btn primary" href="${esc(doc.link_url)}" target="_blank" rel="noopener noreferrer">${icon('external')} Abrir</a>
+        </div>
+      </header>
+      <p class="gdoc-note">Se abre en Google con tu cuenta. Si te pide acceso, pedíselo a quien lo creó (o que lo comparta con toda la escuela).</p>
+      ${preview ? `<div class="gdoc-frame"><iframe src="${esc(preview)}" title="Vista previa de ${esc(doc.title)}" loading="lazy"></iframe></div>` : ''}
+    </div>`;
 }

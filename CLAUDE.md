@@ -121,6 +121,9 @@ brand_assets, aero_draft, aero_published, site_teachers, site_trayectoria`.
   En `app/`: `views/documentos.js` (selector Google Docs / Editor del taller, `openGoogleDoc` abre la pestaña en el
   clic para que no la bloqueen) y `views/documento.js` (página con vista previa `/preview` + botón "Abrir").
   Plantillas para Google: `app/docs/plantillas.js` (segunda entrada de Vite, `googleTemplate(id)`).
+- **Links pegados** (`kind = 'link'`, columna `link_url`, solo https): los crea cualquiera que pueda crear en ese
+  proyecto/evento, sin servidor ni API. En la lista el nombre es un `<a target=_blank>` al link; `#/documento/<id>`
+  muestra vista previa con `embedUrl()` de ui.js. `linkKind(url)` en documentos.js dice si es Docs/Sheets/Slides…
 - Menús y barras hacen `preventDefault` en `mousedown` para no sacarle el foco al editor (si no, se pierde la
   selección y Enter puede borrar texto). Mantenerlo en cualquier control nuevo.
 
@@ -147,9 +150,9 @@ Docentes, trayectoria y otras pestañas de "Sitio web" están en `views/sitio.js
 ## Convenciones a respetar
 
 - **Cache-busting `?v=AAAAMMDDHHMM`**: todos los imports JS, el CSS y el registro de `sw.js` llevan el mismo
-  `?v=` (hoy `202611231700`). El proxy de la universidad cachea agresivo, así que **al cambiar cualquier
+  `?v=` (hoy `202611241000`). El proxy de la universidad cachea agresivo, así que **al cambiar cualquier
   archivo de `app/` hay que subir la versión en TODOS los archivos** (`app/index.html`, `main.js`, cada vista y
-  tab que importe con `?v=`). Ej.: `grep -rl 'v=202611231700' app | xargs sed -i 's/v=202611231700/v=NUEVA/g'`.
+  tab que importe con `?v=`). Ej.: `grep -rl 'v=202611241000' app | xargs sed -i 's/v=202611241000/v=NUEVA/g'`.
 - **Archivo nuevo en `app/`** → agregarlo a la lista `SHELL` de `app/sw.js`.
 - **Cambio en el editor de documentos** → editar `editor-docs/src/`, correr `cd editor-docs && npm ci && npm run build`
   (regenera `app/docs/`), commitear también `app/docs/`, y subir el `?v=` como en cualquier cambio de `app/`.
