@@ -13,10 +13,8 @@ Dos piezas que comparten un mismo backend **Supabase** (`nveisqekmbcdvnuebice.su
 1. **Web pública** — `index.html` (raíz) + `assets/`. Sin login.
 2. **Plataforma** — `app/`. SPA con login, para gestionar proyectos del taller. Es una PWA instalable.
 
-**La web y la plataforma no tienen build, ni bundler, ni tests.** HTML + CSS + JS (ES modules nativos) servido estático.
+**No hay build, ni bundler, ni npm, ni tests.** HTML + CSS + JS (ES modules nativos) servido estático.
 Librerías por CDN (supabase-js `@2.45.4` desde jsdelivr, fuentes de Google).
-**Única excepción:** el editor de documentos (`editor-docs/`, con npm + Vite) se compila a `app/docs/` y
-ese resultado compilado se commitea, así la publicación sigue siendo copiar archivos.
 
 ## Topología
 
@@ -40,27 +38,12 @@ app/
                         evento, sitio, marca
   js/views/tabs/*.js    pestañas de un proyecto: summary, presentation, tasks, updates,
                         milestones, ensayos, team, files, inventory, performance, activity
-  js/views/documentos.js  lista de documentos + galería de plantillas (hub #/documentos y pestañas)
-  js/views/documento.js   abre el editor a pantalla completa (#/documento/<id>)
-  css/docs.css          estilos del editor (se carga solo al abrir un documento)
-  docs/                 editor compilado (NO editar a mano: sale de editor-docs/)
-editor-docs/            código del editor estilo Google Docs (TipTap 3 + Yjs), Vite 8
-  src/editor.js         mountEditor(): pantalla, conexión, título, colaboradores, atajos
-  src/toolbar.js        barra de herramientas · src/menubar.js  menús Archivo/Editar/… · src/menu.js  menús y diálogos
-  src/panels.js         comentarios, historial de versiones, esquema, buscar y reemplazar
-  src/custom.js         extensiones propias (interlineado, sangría, salto de página, índice, comentarios, búsqueda, imágenes)
-  src/actions.js        links, imágenes, ecuaciones, tablas, descargas, impresión
-  src/docx-export.js · src/docx-import.js   Word (docx / mammoth, se cargan aparte)
-  src/demo-provider.js  modo demo: sincroniza pestañas con BroadcastChannel y guarda en localStorage
-  src/index.js          lo que exporta el paquete (mountEditor, stateFromTemplate, stateFromDocx, copyState…)
-docs-server/            servidor de tiempo real (Hocuspocus 4) para el CT de Proxmox; ver su README
-  google.js             Google Docs en el Drive de la cuenta del taller (OAuth + Drive API con fetch)
-deploy/instalar.sh      instalador para un contenedor Debian/Ubuntu virgen: Node 22, Caddy (web + /docs-ws),
-                        systemd, .env, https (dominio o Cloudflare Tunnel). Re-ejecutable = actualizar.
-                        Copia el sitio a /var/www/aeroglobetec y ahí le pone DOCS_SERVER_URL = mismo origen + /docs-ws.
+  js/views/documentos.js  lista de documentos (links a Google): hub #/documentos y pestañas de proyecto/evento
+  js/views/documento.js   página de un documento (#/documento/<id>): vista previa + botón "Abrir"
 supabase/
   schema.sql            TODA la base: tipos, tablas, RLS, triggers, funciones, buckets. Idempotente.
-  *.sql                 scripts de carga puntuales (textos borrador, imágenes, presentación Dron Rover)
+  *.sql                 scripts de carga puntuales (textos borrador, imágenes, presentación Dron Rover,
+                        limpiar_editor.sql para borrar lo que quedó del editor de documentos anterior)
 ```
 
 ## Cómo funciona la plataforma (`app/`)
@@ -97,35 +80,19 @@ updates, comments, project_files, inventory, activity, notifications, tests, iss
 equipment, reservations (turnos), events, event_members, event_projects, event_materials, event_tasks,
 brand_assets, aero_draft, aero_published, site_teachers, site_trayectoria`.
 
-## Documentos colaborativos
+## Documentos (links a Google)
 
-- Tablas: `documents` (fila: título, carpeta, `project_id` | `event_id` | ninguno = del taller, `editable_by`
-  'equipo'|'staff'), `document_states` (estado Yjs, bytea) y `document_versions` (historial; `auto` = del servidor).
-- Permisos: `can_view_doc_scope`, `can_view_document`, `can_edit_document`, `document_access(d)` → 'editar'|'leer'.
-  El contenido NO se escribe desde la web: lo guarda `docs-server` con la service key. La web solo crea la fila,
-  carga el contenido inicial (`initDocState`, insert) y lee/guarda versiones.
-- Flujo: navegador ⇄ `wss` Hocuspocus (`DOCS_SERVER_URL` en config.js, nombre `doc:<uuid>`, token = sesión de
-  Supabase) ⇄ Supabase. Sin `DOCS_SERVER_URL` solo anda el modo demo.
-- Dentro del Y.Doc: fragmento `default` (el texto), mapa `comments` (comentarios y respuestas, la marca
-  `comment` en el texto guarda el id) y mapa `meta` (título en vivo; manda el de la base al abrir).
-- Imágenes: bucket privado `proyectos`, en el documento queda `storage:<ruta>` y se muestra con link firmado.
-- Íconos: Material Symbols de Google Fonts, pedidos solo los que se usan. `vite.config.js` junta la lista sola
-  de `ic('…')`, `icon: '…'` y `b('…', '…')`; un ícono escrito de otra forma va en `EXTRA_ICONS`.
-- **Google Docs** (`kind = 'google'`, columnas `google_id`/`google_url`): los crea `docs-server/google.js` en el Drive
-  de UNA cuenta del taller (OAuth con refresh token guardado en `GOOGLE_STATE_FILE`, permiso `drive.file`, carpetas
-  por proyecto/evento). Rutas HTTP del servidor: `GET /google/estado`, `POST /google/documentos` (en blanco, `html`
-  o `docx` en base64), `POST /google/documentos/<id>/acceso` (comparte con el mail de quien abre: writer/commenter
-  según `document_access`), `PATCH`/`DELETE /google/documentos/<id>`, `GET /google/conectar?clave=` y `/google/callback`.
-  Aceptan cualquier prefijo (`/docs-ws/google/…`). La web llama con `docsServer()` en `api.js` (misma dirección que
-  `DOCS_SERVER_URL` pero http/https). Un trigger impide que un usuario cree o cambie filas `google` a mano.
-  En `app/`: `views/documentos.js` (selector Google Docs / Editor del taller, `openGoogleDoc` abre la pestaña en el
-  clic para que no la bloqueen) y `views/documento.js` (página con vista previa `/preview` + botón "Abrir").
-  Plantillas para Google: `app/docs/plantillas.js` (segunda entrada de Vite, `googleTemplate(id)`).
-- **Links pegados** (`kind = 'link'`, columna `link_url`, solo https): los crea cualquiera que pueda crear en ese
-  proyecto/evento, sin servidor ni API. En la lista el nombre es un `<a target=_blank>` al link; `#/documento/<id>`
-  muestra vista previa con `embedUrl()` de ui.js. `linkKind(url)` en documentos.js dice si es Docs/Sheets/Slides…
-- Menús y barras hacen `preventDefault` en `mousedown` para no sacarle el foco al editor (si no, se pierde la
-  selección y Enter puede borrar texto). Mantenerlo en cualquier control nuevo.
+- Tabla `documents`: título, carpeta, `project_id` | `event_id` | ninguno = de todo el taller, `kind = 'link'`,
+  `link_url` (solo https). El documento vive en Google; la plataforma guarda el link y decide quién lo VE
+  (no quién lo abre en Google: eso se comparte desde Google).
+- Permisos: `can_view_doc_scope(p, e)` (ver), `can_create_document(p, e)` (agregar: quien ve el proyecto/evento;
+  en el taller, staff). Cambiar o sacar: quien lo agregó o staff. Trigger `document_before_write` (autor, fechas,
+  no se mueve de proyecto/evento) y `track_documents` (bitácora "Agregó el link…").
+- En la lista el nombre es un `<a target=_blank>` al link. `linkKind(url)` (documentos.js) dice si es Docs, Sheets,
+  Slides, Drive o Canva; la vista previa de `#/documento/<id>` usa `embedUrl()` de ui.js.
+- Historia: hubo un editor propio (TipTap + Yjs + servidor Hocuspocus en un CT) y creación de Google Docs por API;
+  se sacaron porque el colegio no deja usar la API de Google. Si una base tiene restos de eso (filas `kind <> 'link'`,
+  tablas `document_states`/`document_versions`), la app los ignora y `supabase/limpiar_editor.sql` los borra.
 
 ## Cómo funciona la web pública (`index.html`)
 
@@ -150,12 +117,10 @@ Docentes, trayectoria y otras pestañas de "Sitio web" están en `views/sitio.js
 ## Convenciones a respetar
 
 - **Cache-busting `?v=AAAAMMDDHHMM`**: todos los imports JS, el CSS y el registro de `sw.js` llevan el mismo
-  `?v=` (hoy `202611241000`). El proxy de la universidad cachea agresivo, así que **al cambiar cualquier
+  `?v=` (hoy `202611241200`). El proxy de la universidad cachea agresivo, así que **al cambiar cualquier
   archivo de `app/` hay que subir la versión en TODOS los archivos** (`app/index.html`, `main.js`, cada vista y
-  tab que importe con `?v=`). Ej.: `grep -rl 'v=202611241000' app | xargs sed -i 's/v=202611241000/v=NUEVA/g'`.
+  tab que importe con `?v=`). Ej.: `grep -rl 'v=202611241200' app | xargs sed -i 's/v=202611241200/v=NUEVA/g'`.
 - **Archivo nuevo en `app/`** → agregarlo a la lista `SHELL` de `app/sw.js`.
-- **Cambio en el editor de documentos** → editar `editor-docs/src/`, correr `cd editor-docs && npm ci && npm run build`
-  (regenera `app/docs/`), commitear también `app/docs/`, y subir el `?v=` como en cualquier cambio de `app/`.
 - **Método nuevo de datos** → implementarlo en `api.js` **y** en `demo-api.js` (misma firma), si no el modo demo se rompe.
 - **Cambio de base** → editar `supabase/schema.sql` manteniéndolo idempotente (`if not exists`, `create or
   replace`, políticas que se borran y recrean). Se corre a mano en el SQL Editor de Supabase.
@@ -171,6 +136,4 @@ python -m http.server 8765
 - `http://localhost:8765/` web pública · `http://localhost:8765/app/?demo` plataforma sin login
   (barra arriba para cambiar de usuario/rol) · `/app/` real (necesita red a Supabase).
 - Para verificar visualmente usar Playwright (preinstalado) contra el server local con `?demo`.
-- Documentos en modo demo: `/app/?demo#/documentos`; abrir el mismo documento en dos pestañas prueba la edición
-  en simultáneo. Con servidor real: `cd docs-server && npm install && npm run dev` (sin login, en memoria) y montar
-  el editor apuntando a `ws://localhost:1234`.
+- Documentos en modo demo: `/app/?demo#/documentos`.

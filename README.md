@@ -12,8 +12,7 @@ Sitio y herramientas del taller AeroGlobETec (ETec · Universidad de Mendoza).
 | `supabase/textos_sitio_borrador.sql` | Propuesta de textos para la web: los carga como borrador; se revisan y publican desde **Sitio web** |
 | `supabase/imagenes_sitio.sql` | Pasa los logos del contenido publicado a los archivos de `assets/`. **Correrlo después de publicar la web nueva.** |
 | `supabase/presentacion_dron_rover.sql` | Carga la presentación del proyecto Dron Rover en la plataforma |
-| `editor-docs/` | Código del editor de documentos (estilo Google Docs). Se compila a `app/docs/` |
-| `docs-server/` | Servidor de tiempo real de los documentos. Corre aparte, en el CT de Proxmox (ver su `README.md`) |
+| `supabase/limpiar_editor.sql` | Opcional: borra lo que quedó del editor de documentos anterior (solo si la base llegó a tenerlo) |
 
 ## La plataforma
 
@@ -51,18 +50,7 @@ insert into public.admins (email) values ('nombre@alumno.etec.um.edu.ar');
 
 **Sitio web:** docentes y admins editan textos, apartados, fotos, galerías y colores de la web pública desde la plataforma, con vista previa. Los cambios se guardan como borrador y la web los muestra recién al tocar **Publicar en la web**. La base de datos solo deja guardar, publicar y subir fotos a docentes y admins con sesión iniciada. La web pública lee lo publicado sin login.
 
-**Documentos:** documentos que se escriben entre varias personas a la vez, como en Google Docs o Word. Están en **Documentos** (menú lateral) y en la pestaña **Documentos** de cada proyecto y evento. Cada documento lo ven las mismas personas que ven su proyecto o evento; los del taller en general los ven todos. Tienen:
-- **Edición en simultáneo:** se ven los cursores y los nombres de quienes están escribiendo. Se guarda solo.
-- **Formato completo:** títulos, fuentes, tamaños, colores, resaltado, alineación, interlineado, sangría, listas, listas de tareas, tablas, imágenes, enlaces, ecuaciones, índice automático, saltos de página y caracteres especiales, sobre una hoja A4 con regla.
-- **Comentarios** sobre el texto, con respuestas y "resuelto".
-- **Historial de versiones:** una automática cada media hora de trabajo y las que se guardan con nombre. Se pueden ver y restaurar.
-- **Plantillas** (informe de ensayo, acta de reunión, informe técnico, propuesta) e **importar un Word**.
-- **Descargar** en Word (.docx), PDF, HTML o texto, e imprimir.
-- **Permisos:** quien crea el documento, los docentes y los líderes pueden dejarlo en "solo lectura" para el resto.
-- **Links de Google:** con **Pegar link de Google** se suma un Google Doc, Sheet, Slides, una carpeta de Drive o un Canva, eligiendo en qué proyecto o evento se ve. Tocarlo lo abre en Google. No necesita ninguna configuración (pero hay que compartirlo también desde Google).
-- **Google Docs:** si se conecta una cuenta de Google del taller, al crear un documento se puede elegir **Google Docs** en lugar del editor propio. Se crea en el Drive del taller (con las mismas plantillas, o convirtiendo un Word) y se abre en Google Docs. A cada persona se le da acceso con su mail cuando lo abre desde la plataforma: editor o comentarista según sus permisos. Cómo conectarlo: `docs-server/README.md`, sección Google Docs.
-
-Necesitan el servidor de documentos (`docs-server/`) prendido y su dirección en `DOCS_SERVER_URL` (`app/js/config.js`). Sin eso solo andan en el modo demo, donde se puede probar la edición en simultáneo abriendo el mismo documento en dos pestañas.
+**Documentos:** los Google Docs, Sheets, Slides, carpetas de Drive o Canvas de cada proyecto, en un solo lugar. Están en **Documentos** (menú lateral) y en la pestaña **Documentos** de cada proyecto y evento. Con **Pegar link de Google** se agrega uno: se le pone un nombre, una carpeta (opcional) y se elige quién lo ve (un proyecto, un evento o todo el taller; esto último solo docentes y líderes). Tocarlo lo abre en Google. El documento vive en Google: hay que compartirlo también desde ahí. Lo cambia o lo saca quien lo agregó, un docente o un líder.
 
 **Charlas y competencias:** cada evento (charla o competencia) tiene fecha, lugar, estado, un equipo con roles (expositor/a, equipo técnico, etc.) y los proyectos que se presentan, sean del panel o de afuera. Además:
 - **Materiales:** presentaciones, infografías, videos, documentos y enlaces. Los links de Canva, Google Slides/Docs/Drive y YouTube se ven embebidos adentro de la plataforma.
@@ -120,25 +108,7 @@ La pantalla de login ya tiene el campo para escribirlo. El servidor de mails que
 3. En **URIs de redireccionamiento autorizados**, poné `https://nveisqekmbcdvnuebice.supabase.co/auth/v1/callback`.
 4. Copiá el **Client ID** y el **Client Secret**. En Supabase, andá a **Authentication → Sign In / Providers → Google**, pegalos y activá el proveedor.
 
-### 5. Servidor de documentos
-
-**Todo junto en un CT de Proxmox (o cualquier Debian/Ubuntu recién creado):** como root, un solo comando instala la web, la plataforma y el servidor de documentos, con https:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/MartinLautaroGimenez/aeroglobetec_web/main/deploy/instalar.sh | bash
-```
-
-Pregunta cómo se va a entrar (solo red local, dominio propio o Cloudflare Tunnel) y la *secret key* de Supabase, que queda solo en esa máquina. Para actualizar después: `aeroglobetec-actualizar`. Los detalles están al principio de `deploy/instalar.sh`.
-
-**Probar con un proyecto de Supabase aparte** (sin tocar los datos del taller):
-
-1. Creá un proyecto nuevo en Supabase y corré `supabase/schema.sql` completo en su **SQL Editor**. Crea todo desde cero y deja como admins los mails de la tabla `admins` que están en el schema.
-2. En ese proyecto, **Authentication → URL Configuration**: poné la dirección del CT (por ejemplo `https://docs.tudominio.com/app/`) en **Site URL** y en **Redirect URLs**. El login por link al mail anda sin configurar nada más. El de Google hay que configurarlo de nuevo, porque es otro proyecto.
-3. Corré el instalador. Cuando pregunte por el proyecto, pegá la URL y la *publishable key* del proyecto de prueba. El instalador las cambia solo en la copia que publica: el repo sigue apuntando al proyecto del taller.
-
-**Solo el servidor de documentos**, con la web en otro lado: seguí `docs-server/README.md`. Su dirección va en `DOCS_SERVER_URL` (`app/js/config.js`).
-
-### 6. Claves
+### 5. Claves
 
 `app/js/config.js` tiene la URL del proyecto y la **publishable key**, que es pública por diseño. La **secret key nunca va en el código**, porque saltea todos los permisos. Si alguna vez se compartió, rotala en **Project Settings → API Keys**.
 
@@ -165,7 +135,7 @@ assets/        imágenes de la web
 app/           la plataforma (queda en /app/)
 ```
 
-Las carpetas `supabase/`, `editor-docs/`, `docs-server/`, `deploy/` y el `README.md` no hace falta subirlas. `app/docs/` sí: es el editor ya compilado.
+Las carpetas `supabase/` y el `README.md` no hace falta subirlas.
 
 **Importante:** el contenido del editor usa las imágenes de `assets/`, así que esa carpeta siempre tiene que subirse junto con `index.html`.
 
@@ -184,18 +154,7 @@ app/
   js/main.js          sesión, menú y rutas
   js/views/           pantallas (inicio, proyecto, usuarios, informe)
   js/views/tabs/      pestañas de cada proyecto
-  docs/               editor de documentos ya compilado (no se edita a mano)
-  css/docs.css        estilos del editor de documentos
-editor-docs/          código del editor (TipTap + Yjs); npm run build lo compila a app/docs/
-docs-server/          servidor de tiempo real (Hocuspocus); corre en el CT de Proxmox
-deploy/instalar.sh    instala todo (web + plataforma + documentos) en un contenedor Debian/Ubuntu
 supabase/schema.sql   tablas, permisos (RLS), triggers y funciones de rendimiento
-```
-
-Para cambiar el editor de documentos:
-
-```bash
-cd editor-docs && npm ci && npm run build
 ```
 
 Los permisos de verdad los aplica la base de datos con Row Level Security. La interfaz solo esconde los botones que no corresponden.

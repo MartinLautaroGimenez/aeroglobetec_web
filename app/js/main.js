@@ -1,20 +1,20 @@
 // Punto de entrada: elige la API (Supabase o demo), controla la sesión y el ruteo por hash.
-import { DEMO_MODE } from './config.js?v=202611241000';
-import { esc, avatar, name, icon, ROLE_LABEL, roleChip, isStaff, canManageRoles, hasAccess, timeAgo, toast, errorMessage, openForm, field } from './ui.js?v=202611241000';
-import { renderLogin } from './views/login.js?v=202611241000';
-import { renderDashboard } from './views/dashboard.js?v=202611241000';
-import { renderProject } from './views/project.js?v=202611241000';
-import { renderUsers } from './views/users.js?v=202611241000';
-import { renderReport } from './views/report.js?v=202611241000';
-import { renderTurnos } from './views/turnos.js?v=202611241000';
-import { renderSitio } from './views/sitio.js?v=202611241000';
-import { renderEventos } from './views/eventos.js?v=202611241000';
-import { renderMarca } from './views/marca.js?v=202611241000';
-import { renderEvento } from './views/evento.js?v=202611241000';
-import { renderDocumentos } from './views/documentos.js?v=202611241000';
-import { renderDocumento } from './views/documento.js?v=202611241000';
+import { DEMO_MODE } from './config.js?v=202611241200';
+import { esc, avatar, name, icon, ROLE_LABEL, roleChip, isStaff, canManageRoles, hasAccess, timeAgo, toast, errorMessage, openForm, field } from './ui.js?v=202611241200';
+import { renderLogin } from './views/login.js?v=202611241200';
+import { renderDashboard } from './views/dashboard.js?v=202611241200';
+import { renderProject } from './views/project.js?v=202611241200';
+import { renderUsers } from './views/users.js?v=202611241200';
+import { renderReport } from './views/report.js?v=202611241200';
+import { renderTurnos } from './views/turnos.js?v=202611241200';
+import { renderSitio } from './views/sitio.js?v=202611241200';
+import { renderEventos } from './views/eventos.js?v=202611241200';
+import { renderMarca } from './views/marca.js?v=202611241200';
+import { renderEvento } from './views/evento.js?v=202611241200';
+import { renderDocumentos } from './views/documentos.js?v=202611241200';
+import { renderDocumento } from './views/documento.js?v=202611241200';
 
-const { api } = DEMO_MODE ? await import('./demo-api.js?v=202611241000') : await import('./api.js?v=202611241000');
+const { api } = DEMO_MODE ? await import('./demo-api.js?v=202611241200') : await import('./api.js?v=202611241200');
 const app = document.getElementById('app');
 let me = null;
 

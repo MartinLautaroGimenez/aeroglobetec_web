@@ -1,4 +1,4 @@
-import { esc, name, avatar, icon, options, field, openForm, confirmAction, toast, errorMessage, fmtDate, timeAgo, fileSize, emptyState } from '../../ui.js?v=202611241000';
+import { esc, name, avatar, icon, options, field, openForm, confirmAction, toast, errorMessage, fmtDate, timeAgo, fileSize, emptyState } from '../../ui.js?v=202611241200';
 
 export const RESULT = { exitoso: 'Exitoso', parcial: 'Parcial', fallido: 'Fallido' };
 export const SEVERITY = { critica: 'Crítica', alta: 'Alta', media: 'Media', baja: 'Baja' };

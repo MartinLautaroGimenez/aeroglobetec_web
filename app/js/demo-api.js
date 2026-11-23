@@ -271,36 +271,20 @@ function notify(user_id, project_id, message, link) {
 const withProject = (row) => ({ ...row, projects: (({ name, color }) => ({ name, color }))(db.projects.find(p => p.id === row.project_id) || {}) });
 
 
-// ---------- Documentos (demo) ----------
-// El contenido de cada documento lo guarda el editor en localStorage ("age-doc-<id>").
-const b64 = (bytes) => { let s = ''; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000)); return btoa(s); };
-const unb64 = (t) => Uint8Array.from(atob(t), c => c.charCodeAt(0));
-const docStateKey = (id) => `age-doc-${id}`;
+// ---------- Documentos (demo): links a Google ----------
 function docsList() {
-  if (!db.documents) { Object.assign(db, demoDocs()); save(); }
+  // Los datos guardados de antes (con documentos del editor que ya no existe) se cambian por links
+  if (!db.documents || db.documents.some(d => d.kind !== 'link')) { db.documents = demoDocs(); save(); }
   return db.documents;
 }
 const evMember = (eid, u = db.me) => db.eventMembers.some(m => m.event_id === eid && m.user_id === u);
 const canSeeDoc = (d) => (d.project_id ? canView(d.project_id) : d.event_id ? (staff() || evMember(d.event_id)) : true);
-const canEditDoc = (d) => canSeeDoc(d) && (d.editable_by !== 'staff' || staff() || d.created_by === db.me);
+const canEditDoc = (d) => canSeeDoc(d) && (staff() || d.created_by === db.me);
 const withScope = (d) => ({
   ...d,
   projects: d.project_id ? (({ name, color }) => ({ name, color }))(db.projects.find(p => p.id === d.project_id) || {}) : null,
   events: d.event_id ? (({ title, color }) => ({ title, color }))(db.events.find(e => e.id === d.event_id) || {}) : null,
 });
-// Achica las imágenes para que entren en el navegador (el modo demo no tiene servidor)
-async function demoImage(file) {
-  try {
-    const bmp = await createImageBitmap(file);
-    const scale = Math.min(1, 1000 / Math.max(bmp.width, bmp.height));
-    const c = document.createElement('canvas');
-    c.width = Math.round(bmp.width * scale); c.height = Math.round(bmp.height * scale);
-    c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
-    return c.toDataURL('image/jpeg', 0.8);
-  } catch {
-    return new Promise((resolve) => { const r = new FileReader(); r.onload = () => resolve(r.result); r.readAsDataURL(file); });
-  }
-}
 
 function demoDocs() {
   const P = db.projects[0]?.id;
@@ -308,37 +292,13 @@ function demoDocs() {
   const by = (role) => db.profiles.find(p => p.role === role)?.id || db.me;
   const doc = by('docente'), lider = by('lider'), est = by('estudiante');
   const at = (min) => new Date(Date.now() - min * 60000).toISOString();
-  const row = (o) => ({ id: uid(), project_id: null, event_id: null, folder: '', editable_by: 'equipo', created_at: at(o.age + 60), updated_at: at(o.age), updated_by: o.created_by, ...o });
-  return {
-    docVersions: [],
-    documents: [
-      row({ title: 'Acta: reunión de arranque', project_id: P, folder: 'Reuniones', created_by: lider, age: 180, seed_html: `
-        <h1>Reunión de arranque del Dron Rover</h1>
-        <p><strong>Fecha:</strong> 3 de noviembre · <strong>Lugar:</strong> Taller AeroGlobETec</p>
-        <p><strong>Presentes:</strong> todo el equipo y la profe</p>
-        <h2>Temas</h2><ol><li><p>Reglamento del CATE 2027 y fechas de entrega</p></li><li><p>Reparto de áreas: mecánica, electrónica y software</p></li><li><p>Presupuesto para motores y batería</p></li></ol>
-        <h2>Decisiones</h2><ul><li><p>El chasis se imprime en <mark data-color="#fff2cc" style="background-color:#fff2cc">PETG</mark> para que aguante el calor.</p></li><li><p>Usamos un <strong>ESP32</strong> para el control y la telemetría.</p></li></ul>
-        <h2>Tareas</h2><ul data-type="taskList"><li data-type="taskItem" data-checked="true"><p>Leer el reglamento completo</p></li><li data-type="taskItem" data-checked="false"><p>Primer diseño CAD del chasis</p></li><li data-type="taskItem" data-checked="false"><p>Pedir presupuesto de la batería LiPo</p></li></ul>
-        <p>Próxima reunión: <em>el lunes a las 14 h</em>.</p>` }),
-      row({ title: 'Informe de ensayo: tracción en arena', project_id: P, folder: 'Ensayos', created_by: est, age: 40, seed_html: `
-        <h1>Informe de ensayo: tracción en arena</h1>
-        <p><strong>Objetivo:</strong> comprobar que el rover sube una pendiente de 15° en arena suelta.</p>
-        <h2>Resultados</h2>
-        <table><tbody><tr><th><p>Prueba</p></th><th><p>Pendiente</p></th><th><p>Resultado</p></th></tr>
-        <tr><td><p>1</p></td><td><p>10°</p></td><td><p>Sube sin problema</p></td></tr>
-        <tr><td><p>2</p></td><td><p>15°</p></td><td><p>Patina la rueda trasera izquierda</p></td></tr></tbody></table>
-        <h2>Análisis</h2><p>La fuerza necesaria es <span data-type="inline-math" data-latex="F = m \\cdot g \\cdot \\sin(\\theta)"></span>. Con ruedas con más taco debería alcanzar.</p>` }),
-      row({ title: 'Reglamento del taller', folder: 'Normas', editable_by: 'staff', created_by: doc, age: 4000, seed_html: `
-        <h1 style="text-align:center">Reglamento del taller AeroGlobETec</h1>
-        <p style="text-align:center"><em>Vale para todas las personas que usan el taller.</em></p>
-        <h2>1. Seguridad</h2><ul><li><p>Se usan anteojos de protección en la estación de soldado y con herramientas eléctricas.</p></li><li><p>Las baterías LiPo se cargan siempre en la bolsa ignífuga y con alguien mirando.</p></li></ul>
-        <h2>2. Equipos</h2><p>La impresora 3D y el osciloscopio se reservan desde <strong>Turnos</strong> en la plataforma.</p>
-        <h2>3. Orden</h2><p>Al terminar, cada equipo deja su mesa limpia y guarda los componentes en su caja.</p>` }),
-      ...(E ? [row({ title: 'Guion de la presentación', event_id: E, created_by: lider, age: 300, seed_html: `
-        <h1>Guion de la presentación</h1><p>Tenemos <strong>10 minutos</strong> en total.</p>
-        <ol><li><p><strong>Intro (1 min):</strong> quiénes somos y qué problema resolvemos.</p></li><li><p><strong>El sistema (4 min):</strong> chasis, despliegue y telemetría.</p></li><li><p><strong>Demo (3 min):</strong> video de la prueba en arena.</p></li><li><p><strong>Preguntas (2 min).</strong></p></li></ol>` })] : []),
-    ],
-  };
+  const row = (o) => ({ id: uid(), project_id: null, event_id: null, folder: '', kind: 'link', created_at: at(o.age + 60), updated_at: at(o.age), updated_by: o.created_by, ...o });
+  return [
+    row({ title: 'Acta: reunión de arranque', project_id: P, folder: 'Reuniones', created_by: lider, age: 180, link_url: 'https://docs.google.com/document/d/1-acta-ejemplo/edit' }),
+    row({ title: 'Presupuesto de materiales', project_id: P, folder: 'Compras', created_by: est, age: 40, link_url: 'https://docs.google.com/spreadsheets/d/1-presupuesto-ejemplo/edit' }),
+    row({ title: 'Reglamento del taller', folder: 'Normas', created_by: doc, age: 4000, link_url: 'https://docs.google.com/document/d/1-reglamento-ejemplo/edit' }),
+    ...(E ? [row({ title: 'Presentación para el jurado', event_id: E, created_by: lider, age: 300, link_url: 'https://docs.google.com/presentation/d/1-presentacion-ejemplo/edit' })] : []),
+  ];
 }
 
 export const api = {
@@ -356,7 +316,6 @@ export const api = {
   demoUsers() { return clone(db.profiles); },
   demoLogin(id) { db.me = id; save(); },
   demoReset() {
-    try { Object.keys(localStorage).filter(k => k.startsWith('age-doc-')).forEach(k => localStorage.removeItem(k)); } catch { /* sin almacenamiento */ }
     db = seed(); save();
   },
 
@@ -857,7 +816,7 @@ export const api = {
   },
   async deleteEventTask(id) { if (!staff()) deny(); db.eventTasks = db.eventTasks.filter(t => t.id !== id); save(); },
 
-  // ---------- Documentos colaborativos ----------
+  // ---------- Documentos (links a Google) ----------
   async docs({ projectId, eventId } = {}) {
     return clone(docsList().filter(d => canSeeDoc(d) && (!projectId || d.project_id === projectId) && (!eventId || d.event_id === eventId)).map(withScope))
       .sort((a, b) => b.updated_at.localeCompare(a.updated_at));
@@ -867,81 +826,25 @@ export const api = {
     return d && canSeeDoc(d) ? clone(withScope(d)) : null;
   },
   async createDoc(row) {
-    const d = { id: uid(), project_id: null, event_id: null, folder: '', editable_by: 'equipo', title: 'Documento sin título', ...row, created_by: db.me, created_at: now(), updated_at: now(), updated_by: db.me };
-    if (!d.project_id && !d.event_id && !staff()) throw new Error('Los documentos del taller los crean docentes y líderes. Creá el documento dentro de un proyecto o evento.');
+    const d = { id: uid(), project_id: null, event_id: null, folder: '', title: 'Documento sin título', ...row, kind: 'link', created_by: db.me, created_at: now(), updated_at: now(), updated_by: db.me };
+    if (!d.project_id && !d.event_id && !staff()) throw new Error('Los documentos de todo el taller los agregan docentes y líderes. Agregalo en un proyecto o evento.');
     if (!canSeeDoc(d)) deny();
-    if (d.editable_by === 'staff' && !staff()) deny();
+    if (!/^https:\/\//.test(d.link_url || '')) throw new Error('El link tiene que empezar con https://');
     docsList().push(d);
-    if (d.project_id) log(d.project_id, 'documento', `Creó el documento "${d.title}"`);
+    if (d.project_id) log(d.project_id, 'documento', `Agregó el link "${d.title}"`);
     save();
     return d.id;
   },
-  async initDocState(id, state) {
-    try { localStorage.setItem(docStateKey(id), b64(state)); } catch { throw new Error('No entra en el navegador: el modo demo tiene poco espacio.'); }
-  },
   async updateDoc(id, patch) {
     const d = docsList().find(x => x.id === id);
-    if (!d || !canEditDoc(d)) deny();
-    if ('editable_by' in patch && patch.editable_by !== d.editable_by && !(staff() || d.created_by === db.me)) deny();
+    if (!d || !canEditDoc(d)) throw new Error('Solo quien lo agregó, un docente o un líder pueden cambiarlo.');
     Object.assign(d, patch, { updated_at: now(), updated_by: db.me });
     save();
   },
   async deleteDoc(doc) {
     const d = docsList().find(x => x.id === doc.id);
-    if (!d || !(staff() || d.created_by === db.me)) throw new Error('Solo quien lo creó, un docente o un líder pueden borrarlo.');
+    if (!d || !canEditDoc(d)) throw new Error('Solo quien lo agregó, un docente o un líder pueden sacarlo.');
     db.documents = db.documents.filter(x => x.id !== d.id);
-    db.docVersions = (db.docVersions || []).filter(v => v.document_id !== d.id);
-    try { localStorage.removeItem(docStateKey(d.id)); } catch { /* sin almacenamiento */ }
     save();
   },
-  async docVersions(id) {
-    return clone((db.docVersions || []).filter(v => v.document_id === id).map(({ state, ...v }) => ({ ...v, author: nm(v.created_by) })))
-      .sort((a, b) => b.created_at.localeCompare(a.created_at));
-  },
-  async docVersionState(versionId) {
-    const v = (db.docVersions || []).find(x => x.id === versionId);
-    return v ? unb64(v.state) : null;
-  },
-  async saveDocVersion(id, state, label = '', auto = false) {
-    db.docVersions ||= [];
-    db.docVersions.push({ id: uid(), document_id: id, state: b64(state), label, auto, created_by: db.me, created_at: now() });
-    // En el navegador entra poco: quedan las últimas 15 de cada documento
-    const mine = db.docVersions.filter(v => v.document_id === id).sort((a, b) => b.created_at.localeCompare(a.created_at));
-    const drop = new Set(mine.slice(15).map(v => v.id));
-    db.docVersions = db.docVersions.filter(v => !drop.has(v.id));
-    const d = docsList().find(x => x.id === id);
-    if (d) Object.assign(d, { updated_at: now(), updated_by: db.me });
-    save();
-  },
-  // Al cerrar un documento en el demo se guarda una versión automática cada media hora
-  async demoAutoVersion(id, state) {
-    const last = (db.docVersions || []).filter(v => v.document_id === id).sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
-    const d = docsList().find(x => x.id === id);
-    if (d) { d.updated_at = now(); d.updated_by = db.me; save(); }
-    if (last && Date.now() - new Date(last.created_at) < 30 * 60000) return;
-    await this.saveDocVersion(id, state, '', true);
-  },
-  async deleteDocVersion(versionId) {
-    const v = (db.docVersions || []).find(x => x.id === versionId);
-    if (!v || !(staff() || v.created_by === db.me)) throw new Error('Solo quien la guardó, un docente o un líder pueden borrarla.');
-    db.docVersions = db.docVersions.filter(x => x.id !== versionId);
-    save();
-  },
-  async renameDoc(d, title) { await this.updateDoc(d.id, { title }); },
-  // Google Docs en el demo: se crea la fila, pero no hay un archivo de verdad en Google
-  async googleStatus() { return { configurado: true, conectado: true, cuenta: 'taller.aeroglobe@etec.um.edu.ar', demo: true }; },
-  async createGoogleDoc(row) {
-    const id = await this.createDoc(row);
-    const d = docsList().find(x => x.id === id);
-    Object.assign(d, { kind: 'google', google_id: `demo-${id.slice(0, 8)}`, google_url: '' });
-    save();
-    return id;
-  },
-  async googleOpen(id) {
-    const d = docsList().find(x => x.id === id);
-    if (!d || !canSeeDoc(d)) deny();
-    return { url: '', preview: '', demo: true, email: meP().email, rol: canEditDoc(d) ? 'writer' : 'commenter', title: d.title };
-  },
-  async docAccessToken() { return null; },
-  async uploadDocImage(_doc, file) { return demoImage(file); },
 };
