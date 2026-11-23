@@ -1,8 +1,8 @@
 // Abre un documento en el editor colaborativo (pantalla completa, encima de la plataforma).
 // El editor vive en app/docs/editor.js; acá se le pasan la sesión, los permisos y la API.
-import { esc, name, isStaff, toast, errorMessage } from '../ui.js?v=202611230200';
-import { DOCS_SERVER_URL } from '../config.js?v=202611230200';
-import { loadEditor } from './documentos.js?v=202611230200';
+import { esc, name, isStaff, toast, errorMessage } from '../ui.js?v=202611230400';
+import { DOCS_SERVER_URL } from '../config.js?v=202611230400';
+import { loadEditor } from './documentos.js?v=202611230400';
 
 let open = null;   // { id, close }
 
@@ -11,7 +11,7 @@ function ensureCss() {
   const l = document.createElement('link');
   l.id = 'docs-css';
   l.rel = 'stylesheet';
-  l.href = 'css/docs.css?v=202611230200';
+  l.href = 'css/docs.css?v=202611230400';
   document.head.appendChild(l);
 }
 

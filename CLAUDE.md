@@ -54,6 +54,9 @@ editor-docs/            código del editor estilo Google Docs (TipTap 3 + Yjs), 
   src/demo-provider.js  modo demo: sincroniza pestañas con BroadcastChannel y guarda en localStorage
   src/index.js          lo que exporta el paquete (mountEditor, stateFromTemplate, stateFromDocx, copyState…)
 docs-server/            servidor de tiempo real (Hocuspocus 4) para el CT de Proxmox; ver su README
+deploy/instalar.sh      instalador para un contenedor Debian/Ubuntu virgen: Node 22, Caddy (web + /docs-ws),
+                        systemd, .env, https (dominio o Cloudflare Tunnel). Re-ejecutable = actualizar.
+                        Copia el sitio a /var/www/aeroglobetec y ahí le pone DOCS_SERVER_URL = mismo origen + /docs-ws.
 supabase/
   schema.sql            TODA la base: tipos, tablas, RLS, triggers, funciones, buckets. Idempotente.
   *.sql                 scripts de carga puntuales (textos borrador, imágenes, presentación Dron Rover)
@@ -133,9 +136,9 @@ Docentes, trayectoria y otras pestañas de "Sitio web" están en `views/sitio.js
 ## Convenciones a respetar
 
 - **Cache-busting `?v=AAAAMMDDHHMM`**: todos los imports JS, el CSS y el registro de `sw.js` llevan el mismo
-  `?v=` (hoy `202611230200`). El proxy de la universidad cachea agresivo, así que **al cambiar cualquier
+  `?v=` (hoy `202611230400`). El proxy de la universidad cachea agresivo, así que **al cambiar cualquier
   archivo de `app/` hay que subir la versión en TODOS los archivos** (`app/index.html`, `main.js`, cada vista y
-  tab que importe con `?v=`). Ej.: `grep -rl 'v=202611230200' app | xargs sed -i 's/v=202611230200/v=NUEVA/g'`.
+  tab que importe con `?v=`). Ej.: `grep -rl 'v=202611230400' app | xargs sed -i 's/v=202611230400/v=NUEVA/g'`.
 - **Archivo nuevo en `app/`** → agregarlo a la lista `SHELL` de `app/sw.js`.
 - **Cambio en el editor de documentos** → editar `editor-docs/src/`, correr `cd editor-docs && npm ci && npm run build`
   (regenera `app/docs/`), commitear también `app/docs/`, y subir el `?v=` como en cualquier cambio de `app/`.

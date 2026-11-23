@@ -2,9 +2,9 @@
 import {
   esc, icon, name, avatar, isStaff, field, options, openForm, confirmAction, toast, errorMessage,
   fmtDate, daysUntil, dueLabel, fileSize, emptyState, embedUrl, hasAccess,
-} from '../ui.js?v=202611230200';
-import { KIND, EVENT_STATUS, editEvent } from './eventos.js?v=202611230200';
-import { renderDocList } from './documentos.js?v=202611230200';
+} from '../ui.js?v=202611230400';
+import { KIND, EVENT_STATUS, editEvent } from './eventos.js?v=202611230400';
+import { renderDocList } from './documentos.js?v=202611230400';
 
 const MATERIAL = {
   presentacion: ['Presentaciones', 'presentation'],

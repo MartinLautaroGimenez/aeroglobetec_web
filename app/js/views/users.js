@@ -1,4 +1,4 @@
-import { esc, name, avatar, icon, ROLE_LABEL, roleChip, isStaff, canManageRoles, hasAccess, options, field, openForm, confirmAction, toast, errorMessage, fmtDate, timeAgo } from '../ui.js?v=202611230200';
+import { esc, name, avatar, icon, ROLE_LABEL, roleChip, isStaff, canManageRoles, hasAccess, options, field, openForm, confirmAction, toast, errorMessage, fmtDate, timeAgo } from '../ui.js?v=202611230400';
 
 export async function renderUsers(el, ctx) {
   const { api, me } = ctx;

@@ -1,9 +1,9 @@
 // Documentos colaborativos: la lista (del taller, de un proyecto o de un evento) y la galería
 // de plantillas para empezar uno nuevo. El editor está en app/docs/editor.js (se compila
 // desde editor-docs/) y se abre en #/documento/<id>.
-import { esc, icon, name, isStaff, field, openForm, confirmAction, toast, errorMessage, timeAgo, emptyState } from '../ui.js?v=202611230200';
+import { esc, icon, name, isStaff, field, openForm, confirmAction, toast, errorMessage, timeAgo, emptyState } from '../ui.js?v=202611230400';
 
-export const loadEditor = () => import('../../docs/editor.js?v=202611230200');
+export const loadEditor = () => import('../../docs/editor.js?v=202611230400');
 
 // Las mismas plantillas que editor-docs/src/templates.js (acá solo para dibujar la galería)
 const TEMPLATES = [

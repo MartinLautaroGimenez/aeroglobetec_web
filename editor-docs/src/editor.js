@@ -112,7 +112,7 @@ export function mountEditor(root, opts) {
       token: async () => (await api.docAccessToken()) || '',
       onAuthenticationFailed: ({ reason }) => {
         lastError = reason || 'Sin permiso';
-        showFatal('No pudiste entrar al documento', /permiso/i.test(lastError) ? 'No tenés permiso para abrir este documento.' : `El servidor de documentos rechazó la conexión (${lastError}). Probá cerrar sesión y volver a entrar.`);
+        showFatal('No pudiste entrar al documento', 'No tenés permiso para abrir este documento, o tu sesión venció. Probá salir de la plataforma y volver a entrar.');
       },
       onSynced: () => onSynced(),
       onStatus: ({ status: s }) => {

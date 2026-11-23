@@ -120,7 +120,15 @@ La pantalla de login ya tiene el campo para escribirlo. El servidor de mails que
 
 ### 5. Servidor de documentos
 
-Seguí `docs-server/README.md`: se instala en el CT de Proxmox, se le pone `https` y su dirección va en `DOCS_SERVER_URL` (`app/js/config.js`).
+**Todo junto en un CT de Proxmox (o cualquier Debian/Ubuntu recién creado):** como root, un solo comando instala la web, la plataforma y el servidor de documentos, con https:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/MartinLautaroGimenez/aeroglobetec_web/main/deploy/instalar.sh | bash
+```
+
+Pregunta cómo se va a entrar (solo red local, dominio propio o Cloudflare Tunnel) y la *secret key* de Supabase, que queda solo en esa máquina. Para actualizar después: `aeroglobetec-actualizar`. Los detalles están al principio de `deploy/instalar.sh`.
+
+**Solo el servidor de documentos**, con la web en otro lado: seguí `docs-server/README.md`. Su dirección va en `DOCS_SERVER_URL` (`app/js/config.js`).
 
 ### 6. Claves
 
@@ -149,7 +157,7 @@ assets/        imágenes de la web
 app/           la plataforma (queda en /app/)
 ```
 
-Las carpetas `supabase/`, `editor-docs/`, `docs-server/` y el `README.md` no hace falta subirlas. `app/docs/` sí: es el editor ya compilado.
+Las carpetas `supabase/`, `editor-docs/`, `docs-server/`, `deploy/` y el `README.md` no hace falta subirlas. `app/docs/` sí: es el editor ya compilado.
 
 **Importante:** el contenido del editor usa las imágenes de `assets/`, así que esa carpeta siempre tiene que subirse junto con `index.html`.
 
@@ -172,6 +180,7 @@ app/
   css/docs.css        estilos del editor de documentos
 editor-docs/          código del editor (TipTap + Yjs); npm run build lo compila a app/docs/
 docs-server/          servidor de tiempo real (Hocuspocus); corre en el CT de Proxmox
+deploy/instalar.sh    instala todo (web + plataforma + documentos) en un contenedor Debian/Ubuntu
 supabase/schema.sql   tablas, permisos (RLS), triggers y funciones de rendimiento
 ```
 

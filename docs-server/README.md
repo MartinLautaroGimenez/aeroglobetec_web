@@ -11,6 +11,8 @@ navegador ──wss──▶ este servidor ──▶ Supabase
 
 Los permisos son los mismos de la plataforma: cada conexión trae la sesión de Supabase de la persona, y la base decide.
 
+> **¿Querés todo en un solo comando?** `deploy/instalar.sh` hace los pasos de esta guía solo (y además sirve la web y la plataforma desde la misma máquina). Ver el `README.md` principal. Esta guía es para instalar el servidor a mano.
+
 ## 1. Base de datos
 
 Correr de nuevo `supabase/schema.sql` completo en **SQL Editor** de Supabase. Agrega las tablas `documents`, `document_states` y `document_versions`.
