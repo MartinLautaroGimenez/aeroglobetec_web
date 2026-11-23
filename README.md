@@ -52,6 +52,8 @@ insert into public.admins (email) values ('nombre@alumno.etec.um.edu.ar');
 
 **Documentos:** los Google Docs, Sheets, Slides, carpetas de Drive o Canvas de cada proyecto, en un solo lugar. Están en **Documentos** (menú lateral) y en la pestaña **Documentos** de cada proyecto y evento. Con **Pegar link de Google** se agrega uno: se le pone un nombre, una carpeta (opcional) y se elige quién lo ve (un proyecto, un evento o todo el taller; esto último solo docentes y líderes). Tocarlo lo abre en Google. El documento vive en Google: hay que compartirlo también desde ahí. Lo cambia o lo saca quien lo agregó, un docente o un líder.
 
+**Pizarras:** para dibujar ideas, esquemas y diagramas entre varios a la vez (con [Excalidraw](https://excalidraw.com)). Están en **Pizarras** (menú lateral) y en la pestaña **Pizarras** de cada proyecto y evento. Las ve y las dibuja quien ve ese proyecto o evento; se ven los cursores de los demás y se guardan solas. Se pueden pegar imágenes y exportar como PNG o SVG desde el menú de la pizarra.
+
 **Charlas y competencias:** cada evento (charla o competencia) tiene fecha, lugar, estado, un equipo con roles (expositor/a, equipo técnico, etc.) y los proyectos que se presentan, sean del panel o de afuera. Además:
 - **Materiales:** presentaciones, infografías, videos, documentos y enlaces. Los links de Canva, Google Slides/Docs/Drive y YouTube se ven embebidos adentro de la plataforma.
 - **Preparación:** lista de tareas con responsable y fecha, que el equipo va tildando.

@@ -1,7 +1,7 @@
 // Documentos: links a Google Docs, Sheets, Slides, carpetas de Drive, Canva… de cada proyecto,
 // evento o del taller. El documento vive en Google; acá queda el link y quién lo ve.
 // Se usa en #/documentos (todo lo que veo) y en la pestaña Documentos de proyectos y eventos.
-import { esc, icon, name, isStaff, field, openForm, confirmAction, toast, errorMessage, timeAgo, emptyState } from '../ui.js?v=202611241200';
+import { esc, icon, name, isStaff, field, openForm, confirmAction, toast, errorMessage, timeAgo, emptyState } from '../ui.js?v=202611241500';
 
 // Qué es, según la dirección
 export function linkKind(url) {

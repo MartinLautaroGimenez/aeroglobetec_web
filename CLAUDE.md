@@ -96,6 +96,20 @@ brand_assets, aero_draft, aero_published, site_teachers, site_trayectoria`.
   se sacaron porque el colegio no deja usar la API de Google. Si una base tiene restos de eso (filas `kind <> 'link'`,
   tablas `document_states`/`document_versions`), la app los ignora y `supabase/limpiar_editor.sql` los borra.
 
+## Pizarras (Excalidraw)
+
+- `views/pizarras.js`: lista (`#/pizarras` y pestaña de proyecto/evento) y pizarra a pantalla completa (`#/pizarra/<id>`).
+  Excalidraw 0.18.1 + React 19.1.0 se cargan desde **esm.sh** (CSS y fuentes desde jsdelivr, `EXCALIDRAW_ASSET_PATH`);
+  versiones fijas en `XV`, `REACT`, `REACT_DOM`. Sin build.
+- Tabla `boards`: `elements` (jsonb, solo los no borrados), `files` (imágenes en dataURL por id; se suman con la
+  RPC `board_add_files` para no pisar las de otro), `preview` (PNG chico para la lista, cada ~15 s). Permisos como
+  documentos: ve y dibuja quien ve el lugar (`can_view_doc_scope`), crea `can_create_document`, borra autor o staff.
+- Tiempo real: `api.boardChannel(id, …)` = canal **privado** de Supabase Realtime `pizarra:<id>` (políticas en
+  `realtime.messages` con `can_view_board`) con presencia. Mensajes: `el` (elementos cambiados, en partes de 80;
+  se integran con `reconcileElements`), `files` (avisa que hay imágenes nuevas en la base), `hola` (recién llegado:
+  le mandan todo), `ptr` (cursor), `titulo`. Guardado: 1,5 s después del último cambio, al cerrar y al salir.
+  En el demo el canal es un `BroadcastChannel` entre pestañas.
+
 ## Cómo funciona la web pública (`index.html`)
 
 - Página única con "rutas" por hash (`#inicio`, `#sumate`, `#profes`, `#trayectoria`, `#trayectoria-<slug>`…),
@@ -119,9 +133,9 @@ Docentes, trayectoria y otras pestañas de "Sitio web" están en `views/sitio.js
 ## Convenciones a respetar
 
 - **Cache-busting `?v=AAAAMMDDHHMM`**: todos los imports JS, el CSS y el registro de `sw.js` llevan el mismo
-  `?v=` (hoy `202611241200`). El proxy de la universidad cachea agresivo, así que **al cambiar cualquier
+  `?v=` (hoy `202611241500`). El proxy de la universidad cachea agresivo, así que **al cambiar cualquier
   archivo de `app/` hay que subir la versión en TODOS los archivos** (`app/index.html`, `main.js`, cada vista y
-  tab que importe con `?v=`). Ej.: `grep -rl 'v=202611241200' app | xargs sed -i 's/v=202611241200/v=NUEVA/g'`.
+  tab que importe con `?v=`). Ej.: `grep -rl 'v=202611241500' app | xargs sed -i 's/v=202611241500/v=NUEVA/g'`.
 - **Archivo nuevo en `app/`** → agregarlo a la lista `SHELL` de `app/sw.js`.
 - **Método nuevo de datos** → implementarlo en `api.js` **y** en `demo-api.js` (misma firma), si no el modo demo se rompe.
 - **Cambio de base** → editar `supabase/schema.sql` manteniéndolo idempotente (`if not exists`, `create or

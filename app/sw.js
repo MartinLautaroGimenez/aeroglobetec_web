@@ -9,14 +9,14 @@ const SHELL = [
   'js/main.js', 'js/api.js', 'js/demo-api.js', 'js/ui.js', 'js/config.js', 'js/export.js',
   'js/views/login.js', 'js/views/dashboard.js', 'js/views/project.js', 'js/views/users.js',
   'js/views/report.js', 'js/views/turnos.js', 'js/views/sitio.js', 'js/views/marca.js', 'js/views/eventos.js', 'js/views/evento.js',
-  'js/views/documentos.js', 'js/views/documento.js',
+  'js/views/documentos.js', 'js/views/documento.js', 'js/views/pizarras.js',
   'js/views/tabs/summary.js', 'js/views/tabs/presentation.js', 'js/views/tabs/tasks.js', 'js/views/tabs/updates.js', 'js/views/tabs/milestones.js',
   'js/views/tabs/ensayos.js', 'js/views/tabs/team.js', 'js/views/tabs/files.js', 'js/views/tabs/inventory.js',
   'js/views/tabs/performance.js', 'js/views/tabs/activity.js',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/favicon-32.png',
 ];
 // Librerías y fuentes externas que también conviene guardar
-const CDN = ['cdn.jsdelivr.net', 'cdnjs.cloudflare.com', 'fonts.googleapis.com', 'fonts.gstatic.com'];
+const CDN = ['esm.sh', 'cdn.jsdelivr.net', 'cdnjs.cloudflare.com', 'fonts.googleapis.com', 'fonts.gstatic.com'];
 
 self.addEventListener('install', (event) => {
   const urls = SHELL.map(u => /\.(js|css)$/.test(u) ? `${u}?v=${VERSION}` : u);

@@ -2,9 +2,10 @@
 import {
   esc, icon, name, avatar, isStaff, field, options, openForm, confirmAction, toast, errorMessage,
   fmtDate, daysUntil, dueLabel, fileSize, emptyState, embedUrl, hasAccess,
-} from '../ui.js?v=202611241200';
-import { KIND, EVENT_STATUS, editEvent } from './eventos.js?v=202611241200';
-import { renderDocList } from './documentos.js?v=202611241200';
+} from '../ui.js?v=202611241500';
+import { KIND, EVENT_STATUS, editEvent } from './eventos.js?v=202611241500';
+import { renderDocList } from './documentos.js?v=202611241500';
+import { renderBoardList } from './pizarras.js?v=202611241500';
 
 const MATERIAL = {
   presentacion: ['Presentaciones', 'presentation'],
@@ -15,7 +16,7 @@ const MATERIAL = {
 };
 const SINGULAR = { presentacion: 'Presentación', infografia: 'Infografía', video: 'Video', documento: 'Documento', enlace: 'Enlace' };
 const isImage = (u) => /\.(png|jpe?g|webp|gif|svg)(\?|#|$)/i.test(u || '');
-const TABS = [['resumen', 'Resumen'], ['materiales', 'Materiales'], ['documentos', 'Documentos'], ['preparacion', 'Preparación'], ['equipo', 'Equipo y proyectos']];
+const TABS = [['resumen', 'Resumen'], ['materiales', 'Materiales'], ['documentos', 'Documentos'], ['pizarras', 'Pizarras'], ['preparacion', 'Preparación'], ['equipo', 'Equipo y proyectos']];
 
 export async function renderEvento(el, ctx) {
   const { api, me, params } = ctx;
@@ -281,6 +282,7 @@ export async function renderEvento(el, ctx) {
 
   // Se arma la pestaña al final, cuando ya están definidas todas las funciones y variables
   if (tab === 'documentos') { await renderDocList(body, ctx, { eventId: id }); return; }
+  if (tab === 'pizarras') { await renderBoardList(body, ctx, { eventId: id }); return; }
   ({ resumen, materiales, preparacion, equipo })[tab]();
 
   async function viewMaterial(m) {

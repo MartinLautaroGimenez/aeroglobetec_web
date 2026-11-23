@@ -1,16 +1,17 @@
-import { esc, isStaff, openForm, field, colorPicker, confirmAction, toast, errorMessage } from '../ui.js?v=202611241200';
-import { renderSummary } from './tabs/summary.js?v=202611241200';
-import { renderPresentation } from './tabs/presentation.js?v=202611241200';
-import { renderTasks } from './tabs/tasks.js?v=202611241200';
-import { renderUpdates } from './tabs/updates.js?v=202611241200';
-import { renderMilestones } from './tabs/milestones.js?v=202611241200';
-import { renderEnsayos } from './tabs/ensayos.js?v=202611241200';
-import { renderTeam } from './tabs/team.js?v=202611241200';
-import { renderFiles } from './tabs/files.js?v=202611241200';
-import { renderInventory } from './tabs/inventory.js?v=202611241200';
-import { renderPerformance } from './tabs/performance.js?v=202611241200';
-import { renderActivity } from './tabs/activity.js?v=202611241200';
-import { renderDocList } from './documentos.js?v=202611241200';
+import { esc, isStaff, openForm, field, colorPicker, confirmAction, toast, errorMessage } from '../ui.js?v=202611241500';
+import { renderSummary } from './tabs/summary.js?v=202611241500';
+import { renderPresentation } from './tabs/presentation.js?v=202611241500';
+import { renderTasks } from './tabs/tasks.js?v=202611241500';
+import { renderUpdates } from './tabs/updates.js?v=202611241500';
+import { renderMilestones } from './tabs/milestones.js?v=202611241500';
+import { renderEnsayos } from './tabs/ensayos.js?v=202611241500';
+import { renderTeam } from './tabs/team.js?v=202611241500';
+import { renderFiles } from './tabs/files.js?v=202611241500';
+import { renderInventory } from './tabs/inventory.js?v=202611241500';
+import { renderPerformance } from './tabs/performance.js?v=202611241500';
+import { renderActivity } from './tabs/activity.js?v=202611241500';
+import { renderDocList } from './documentos.js?v=202611241500';
+import { renderBoardList } from './pizarras.js?v=202611241500';
 
 const TABS = [
   ['resumen', 'Resumen', renderSummary],
@@ -21,6 +22,7 @@ const TABS = [
   ['ensayos', 'Ensayos y fallas', renderEnsayos],
   ['equipo', 'Equipo y áreas', renderTeam],
   ['documentos', 'Documentos', (el, c) => renderDocList(el, c, { projectId: c.project.id })],
+  ['pizarras', 'Pizarras', (el, c) => renderBoardList(el, c, { projectId: c.project.id })],
   ['archivos', 'Archivos', renderFiles],
   ['inventario', 'Inventario', renderInventory],
   ['rendimiento', 'Rendimiento', renderPerformance],
@@ -74,7 +76,7 @@ export async function renderProject(el, ctx) {
     btn.disabled = true;
     btn.textContent = 'Generando…';
     try {
-      const { exportProjectToExcel } = await import('../export.js?v=202611241200');
+      const { exportProjectToExcel } = await import('../export.js?v=202611241500');
       await exportProjectToExcel(api, project, { staff });
       toast('Excel descargado');
     } catch (e) { toast(errorMessage(e), 'error'); }

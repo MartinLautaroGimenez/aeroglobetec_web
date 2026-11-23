@@ -847,4 +847,85 @@ export const api = {
     db.documents = db.documents.filter(x => x.id !== d.id);
     save();
   },
+
+  // ---------- Pizarras (demo: se guardan en el navegador; las pestañas se pasan los cambios) ----------
+  async boards({ projectId, eventId } = {}) {
+    db.boards ||= [];
+    return clone(db.boards.filter(x => canSeeDoc(x) && (!projectId || x.project_id === projectId) && (!eventId || x.event_id === eventId))
+      .map(({ elements, files, ...x }) => withScope(x))).sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+  },
+  async board(id) {
+    const x = (db.boards || []).find(y => y.id === id);
+    return x && canSeeDoc(x) ? clone(withScope(x)) : null;
+  },
+  async createBoard(row) {
+    db.boards ||= [];
+    const x = { id: uid(), project_id: null, event_id: null, title: 'Pizarra sin título', elements: [], files: {}, preview: null, ...row, created_by: db.me, created_at: now(), updated_at: now(), updated_by: db.me };
+    if (!x.project_id && !x.event_id && !staff()) throw new Error('Las pizarras de todo el taller las crean docentes y líderes. Creala en un proyecto o evento.');
+    if (!canSeeDoc(x)) deny();
+    db.boards.push(x);
+    if (x.project_id) log(x.project_id, 'pizarra', `Creó la pizarra "${x.title}"`);
+    save();
+    return x.id;
+  },
+  async updateBoard(id, patch) {
+    const x = (db.boards || []).find(y => y.id === id);
+    if (!x || !canSeeDoc(x)) deny();
+    Object.assign(x, patch, { updated_at: now(), updated_by: db.me });
+    save();
+  },
+  async deleteBoard(b) {
+    const x = (db.boards || []).find(y => y.id === b.id);
+    if (!x || !canSeeDoc(x) || !(staff() || x.created_by === db.me)) throw new Error('Solo quien la creó, un docente o un líder pueden borrarla.');
+    db.boards = db.boards.filter(y => y.id !== b.id);
+    save();
+  },
+  async saveBoard(id, elements, preview) {
+    // Otra pestaña pudo guardar mientras tanto: se relee antes de escribir
+    db = load();
+    const x = (db.boards || []).find(y => y.id === id);
+    if (!x) return;
+    Object.assign(x, { elements, updated_at: now(), updated_by: db.me }, preview ? { preview } : {});
+    try { localStorage.setItem(KEY, JSON.stringify(db)); } catch { throw new Error('No entra en el navegador: el modo demo tiene poco espacio (probá con imágenes más chicas).'); }
+  },
+  async addBoardFiles(id, files) {
+    db = load();
+    const x = (db.boards || []).find(y => y.id === id);
+    if (!x) return;
+    x.files = { ...x.files, ...files };
+    try { localStorage.setItem(KEY, JSON.stringify(db)); } catch { throw new Error('No entra en el navegador: el modo demo tiene poco espacio (probá con imágenes más chicas).'); }
+  },
+  async boardFiles(id) {
+    db = load();
+    return clone((db.boards || []).find(y => y.id === id)?.files || {});
+  },
+  boardChannel(id, { me, onMessage, onPeers, onStatus }) {
+    const key = uid();
+    const bc = new BroadcastChannel(`age-pizarra-${id}`);
+    const peers = new Map();
+    const emit = () => onPeers([...peers.entries()].map(([k, v]) => ({ key: k, ...v.state })));
+    const hello = (reply) => bc.postMessage({ t: '__presencia', key, state: me, reply });
+    bc.onmessage = ({ data }) => {
+      if (data.t === '__presencia') {
+        const isNew = !peers.has(data.key);
+        peers.set(data.key, { state: data.state, seen: Date.now() });
+        if (isNew) { emit(); if (!data.reply) hello(true); }
+      } else if (data.t === '__chau') { peers.delete(data.key); emit(); }
+      else onMessage(data.payload);
+    };
+    const beat = setInterval(() => {
+      hello(true);
+      let changed = false;
+      peers.forEach((v, k) => { if (Date.now() - v.seen > 25000) { peers.delete(k); changed = true; } });
+      if (changed) emit();
+    }, 8000);
+    const bye = () => bc.postMessage({ t: '__chau', key });
+    window.addEventListener('beforeunload', bye);
+    setTimeout(() => { onStatus?.('SUBSCRIBED'); hello(false); }, 0);
+    return {
+      key,
+      send: (payload) => bc.postMessage({ t: 'm', payload }),
+      close: () => { bye(); clearInterval(beat); window.removeEventListener('beforeunload', bye); bc.close(); },
+    };
+  },
 };

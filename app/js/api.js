@@ -1,7 +1,7 @@
 // Capa de datos con Supabase. Todas las vistas hablan con la base a través de este módulo.
 // Los permisos reales los aplica la base de datos (ver supabase/schema.sql).
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm';
-import { SUPABASE_URL, SUPABASE_KEY, ALLOWED_DOMAINS } from './config.js?v=202611241200';
+import { SUPABASE_URL, SUPABASE_KEY, ALLOWED_DOMAINS } from './config.js?v=202611241500';
 
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: { persistSession: true, detectSessionInUrl: true, flowType: 'pkce' },
@@ -514,5 +514,56 @@ export const api = {
   async deleteDoc(d) {
     const r = check(await sb.from('documents').delete().eq('id', d.id).select('id'));
     if (!r.length) throw new Error('Solo quien lo agregó, un docente o un líder pueden sacarlo.');
+  },
+
+  // ---------- Pizarras (Excalidraw) ----------
+  async boards({ projectId, eventId } = {}) {
+    let q = sb.from('boards').select('id, title, preview, project_id, event_id, created_by, created_at, updated_by, updated_at, projects(name, color), events(title, color)')
+      .order('updated_at', { ascending: false });
+    if (projectId) q = q.eq('project_id', projectId);
+    if (eventId) q = q.eq('event_id', eventId);
+    return check(await q);
+  },
+  async board(id) {
+    return check(await sb.from('boards').select('*, projects(name, color), events(title, color)').eq('id', id).maybeSingle());
+  },
+  async createBoard(row) {
+    return check(await sb.from('boards').insert(row).select('id').single()).id;
+  },
+  async updateBoard(id, patch) {
+    const r = check(await sb.from('boards').update(patch).eq('id', id).select('id'));
+    if (!r.length) throw new Error('No tenés permiso para cambiar esta pizarra.');
+  },
+  async deleteBoard(b) {
+    const r = check(await sb.from('boards').delete().eq('id', b.id).select('id'));
+    if (!r.length) throw new Error('Solo quien la creó, un docente o un líder pueden borrarla.');
+  },
+  async saveBoard(id, elements, preview) {
+    check(await sb.from('boards').update(preview ? { elements, preview } : { elements }).eq('id', id));
+  },
+  async addBoardFiles(id, files) {
+    check(await sb.rpc('board_add_files', { b: id, f: files }));
+  },
+  async boardFiles(id) {
+    return check(await sb.from('boards').select('files').eq('id', id).single()).files || {};
+  },
+  // Canal en tiempo real de una pizarra: mensajes entre los que la tienen abierta y quién está
+  boardChannel(id, { me, onMessage, onPeers, onStatus }) {
+    const key = crypto.randomUUID();
+    const ch = sb.channel(`pizarra:${id}`, { config: { private: true, broadcast: { self: false }, presence: { key } } });
+    ch.on('broadcast', { event: 'm' }, ({ payload }) => onMessage(payload));
+    ch.on('presence', { event: 'sync' }, () => {
+      const st = ch.presenceState();
+      onPeers(Object.entries(st).filter(([k]) => k !== key).map(([k, v]) => ({ key: k, ...v[0] })));
+    });
+    ch.subscribe((status) => {
+      onStatus?.(status);
+      if (status === 'SUBSCRIBED') ch.track(me);
+    });
+    return {
+      key,
+      send: (payload) => ch.send({ type: 'broadcast', event: 'm', payload }),
+      close: () => sb.removeChannel(ch),
+    };
   },
 };

@@ -1753,6 +1753,114 @@ drop policy if exists docs_taller_insert on storage.objects;
 drop policy if exists docs_taller_delete on storage.objects;
 
 -- =====================================================================
+-- Pizarras (Excalidraw): dibujos, diagramas y lluvias de ideas de cada proyecto, evento o del
+-- taller. Las ve quien ve ese lugar (como los documentos) y las dibuja cualquiera que las ve.
+-- El dibujo se guarda acá (elements y files en jsonb); mientras varias personas dibujan a la
+-- vez, los cambios viajan por Supabase Realtime en el canal privado "pizarra:<id>".
+-- =====================================================================
+create table if not exists public.boards (
+  id          uuid primary key default gen_random_uuid(),
+  project_id  uuid references public.projects(id) on delete cascade,
+  event_id    uuid references public.events(id) on delete cascade,
+  title       text not null default 'Pizarra sin título' check (length(trim(title)) between 1 and 200),
+  elements    jsonb not null default '[]'::jsonb,
+  files       jsonb not null default '{}'::jsonb,   -- imágenes pegadas en la pizarra, por id
+  preview     text check (preview is null or length(preview) < 400000),  -- miniatura (PNG) para la lista
+  created_by  uuid references public.profiles(id) on delete set null default auth.uid(),
+  created_at  timestamptz not null default now(),
+  updated_by  uuid references public.profiles(id) on delete set null,
+  updated_at  timestamptz not null default now(),
+  check (project_id is null or event_id is null)
+);
+alter table public.boards add column if not exists preview text check (preview is null or length(preview) < 400000);
+create index if not exists boards_project_idx on public.boards(project_id);
+create index if not exists boards_event_idx on public.boards(event_id);
+
+create or replace function public.try_uuid(t text) returns uuid
+language plpgsql immutable as $$
+begin
+  return t::uuid;
+exception when others then
+  return null;
+end $$;
+
+create or replace function public.can_view_board(b uuid) returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (select 1 from boards x where x.id = b and public.can_view_doc_scope(x.project_id, x.event_id));
+$$;
+
+create or replace function public.board_before_write() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if tg_op = 'INSERT' then
+    new.created_by := coalesce(auth.uid(), new.created_by);
+    new.created_at := now();
+  else
+    if new.project_id is distinct from old.project_id or new.event_id is distinct from old.event_id then
+      raise exception 'Una pizarra no se puede pasar a otro proyecto o evento';
+    end if;
+    new.created_by := old.created_by;
+    new.created_at := old.created_at;
+  end if;
+  new.updated_by := coalesce(auth.uid(), new.updated_by);
+  new.updated_at := now();
+  return new;
+end $$;
+drop trigger if exists board_before_write on public.boards;
+create trigger board_before_write before insert or update on public.boards
+  for each row execute function public.board_before_write();
+
+create or replace function public.track_boards() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if new.project_id is not null then
+    perform public.log_activity(new.project_id, 'pizarra', format('Creó la pizarra "%s"', new.title));
+  end if;
+  return new;
+end $$;
+drop trigger if exists track_boards on public.boards;
+create trigger track_boards after insert on public.boards
+  for each row execute function public.track_boards();
+
+-- Suma imágenes nuevas sin pisar las que agregó otra persona al mismo tiempo
+create or replace function public.board_add_files(b uuid, f jsonb) returns void
+language sql security invoker set search_path = public as $$
+  update boards set files = files || f where id = b;
+$$;
+grant execute on function public.board_add_files(uuid, jsonb) to authenticated;
+
+alter table public.boards enable row level security;
+do $$
+declare r record;
+begin
+  for r in select policyname from pg_policies where schemaname = 'public' and tablename = 'boards' loop
+    execute format('drop policy %I on public.boards', r.policyname);
+  end loop;
+end $$;
+create policy boards_select on public.boards for select to authenticated
+  using (public.can_view_doc_scope(project_id, event_id));
+create policy boards_insert on public.boards for insert to authenticated
+  with check (public.can_create_document(project_id, event_id));
+create policy boards_update on public.boards for update to authenticated
+  using (public.can_view_doc_scope(project_id, event_id)) with check (public.can_view_doc_scope(project_id, event_id));
+create policy boards_delete on public.boards for delete to authenticated
+  using (public.can_view_doc_scope(project_id, event_id) and (created_by = auth.uid() or public.is_staff()));
+
+-- Tiempo real: solo quien ve la pizarra escucha y manda en su canal privado "pizarra:<id>"
+do $$
+begin
+  if exists (select 1 from pg_namespace where nspname = 'realtime')
+     and exists (select 1 from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'realtime' and c.relname = 'messages') then
+    execute 'drop policy if exists pizarras_escuchar on realtime.messages';
+    execute 'drop policy if exists pizarras_mandar on realtime.messages';
+    execute $p$create policy pizarras_escuchar on realtime.messages for select to authenticated
+      using (realtime.topic() like 'pizarra:%' and public.can_view_board(public.try_uuid(split_part(realtime.topic(), ':', 2))))$p$;
+    execute $p$create policy pizarras_mandar on realtime.messages for insert to authenticated
+      with check (realtime.topic() like 'pizarra:%' and public.can_view_board(public.try_uuid(split_part(realtime.topic(), ':', 2))))$p$;
+  end if;
+end $$;
+
+-- =====================================================================
 -- Solo cuentas aprobadas: una política restrictiva en cada tabla se suma a las demás,
 -- así una cuenta pendiente o rechazada no ve ni modifica nada aunque tenga el dominio.
 -- La web pública (sin login) no se ve afectada. Va al final para cubrir todas las tablas.

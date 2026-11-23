@@ -1,4 +1,4 @@
-import { esc, name, icon, field, openForm, confirmAction, toast, errorMessage, fileSize, fmtDate, emptyState } from '../../ui.js?v=202611241200';
+import { esc, name, icon, field, openForm, confirmAction, toast, errorMessage, fileSize, fmtDate, emptyState } from '../../ui.js?v=202611241500';
 
 export async function renderFiles(el, ctx) {
   const { api, project, staff, me } = ctx;

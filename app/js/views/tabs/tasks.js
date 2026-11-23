@@ -1,4 +1,4 @@
-import { esc, name, avatar, TASK_STATUS, PRIORITY, dueLabel, options, field, openForm, confirmAction, toast, errorMessage } from '../../ui.js?v=202611241200';
+import { esc, name, avatar, TASK_STATUS, PRIORITY, dueLabel, options, field, openForm, confirmAction, toast, errorMessage } from '../../ui.js?v=202611241500';
 
 export async function renderTasks(el, ctx) {
   const { api, project, members, areas, staff, me } = ctx;

@@ -1,7 +1,7 @@
 // Página de un documento (#/documento/<id>): se llega desde la bitácora o las notificaciones.
 // Muestra la vista previa (si Google la deja incrustar) y el botón para abrirlo en Google.
-import { esc, icon, fmtDateTime, embedUrl } from '../ui.js?v=202611241200';
-import { linkKind } from './documentos.js?v=202611241200';
+import { esc, icon, fmtDateTime, embedUrl } from '../ui.js?v=202611241500';
+import { linkKind } from './documentos.js?v=202611241500';
 
 export async function renderDocumento(el, ctx) {
   const { api, params } = ctx;

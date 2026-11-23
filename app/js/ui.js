@@ -318,6 +318,7 @@ const ICONS = {
   trophy: '<path d="M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M7 6H4v2a3 3 0 0 0 3 3M17 6h3v2a3 3 0 0 1-3 3M12 14v4M8 21h8"/>',
   play: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m10 9 5 3-5 3z"/>',
   link: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>',
+  board: '<rect x="3" y="3" width="18" height="13" rx="2"/><path d="m7 12 3-3 2 2 4-4M8 21l4-5 4 5"/>',
   presentation: '<path d="M3 4h18M5 4v10h14V4M12 14v4M8 21l4-3 4 3"/>',
 };
 export function icon(nameOf, cls = '') {
