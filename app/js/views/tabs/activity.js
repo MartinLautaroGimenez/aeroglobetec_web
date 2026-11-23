@@ -1,9 +1,9 @@
-import { esc, name, icon, fmtDate, emptyState, parseDate } from '../../ui.js?v=202610180031';
+import { esc, name, icon, fmtDate, emptyState, parseDate } from '../../ui.js?v=202611230200';
 
 const KINDS = {
   tarea: ['check', 'Tareas'], avance: ['upload', 'Avances'], revision: ['edit', 'Revisiones'], hito: ['flag', 'Hitos'],
   equipo: ['users', 'Equipo'], archivo: ['folder', 'Archivos'], inventario: ['box', 'Inventario'], area: ['layers', 'Áreas'],
-  ensayo: ['flask', 'Ensayos'], falla: ['alert', 'Fallas'],
+  ensayo: ['flask', 'Ensayos'], falla: ['alert', 'Fallas'], documento: ['file', 'Documentos'],
 };
 
 export async function renderActivity(el, ctx) {

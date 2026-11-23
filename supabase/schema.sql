@@ -1646,6 +1646,179 @@ create policy invited_emails_write on public.invited_emails for all to authentic
   using (public.is_docente()) with check (public.is_docente() and (role <> 'docente' or public.is_admin()));
 
 -- =====================================================================
+-- Documentos colaborativos (estilo Google Docs)
+-- Cada documento es del taller en general, de un proyecto o de un evento, y lo ve quien
+-- ve ese proyecto o evento. Los del taller los ven todas las cuentas aprobadas.
+-- El contenido NO se edita por acá: lo maneja el servidor de documentos (docs-server/),
+-- que guarda el estado de Yjs en document_states con la service key. Desde la web solo
+-- se crea la fila, se cambia el título o la carpeta y se guardan o leen versiones.
+-- Imágenes: bucket privado "proyectos", en <project_id>/documentos/<doc>/,
+-- eventos/<event_id>/documentos/<doc>/ o taller/documentos/<doc>/.
+-- =====================================================================
+create table if not exists public.documents (
+  id          uuid primary key default gen_random_uuid(),
+  project_id  uuid references public.projects(id) on delete cascade,
+  event_id    uuid references public.events(id) on delete cascade,
+  title       text not null default 'Documento sin título' check (length(trim(title)) between 1 and 200),
+  folder      text not null default '' check (length(folder) <= 60),
+  -- equipo: lo edita cualquiera que lo ve · staff: lo editan docentes, líderes y admins (el resto lo lee)
+  editable_by text not null default 'equipo' check (editable_by in ('equipo', 'staff')),
+  created_by  uuid references public.profiles(id) on delete set null default auth.uid(),
+  created_at  timestamptz not null default now(),
+  updated_by  uuid references public.profiles(id) on delete set null,
+  updated_at  timestamptz not null default now(),
+  check (project_id is null or event_id is null)
+);
+create index if not exists documents_project_idx on public.documents(project_id);
+create index if not exists documents_event_idx on public.documents(event_id);
+
+-- Estado actual del documento (Yjs). Lo escribe el servidor de documentos.
+create table if not exists public.document_states (
+  document_id uuid primary key references public.documents(id) on delete cascade,
+  state       bytea not null,
+  updated_at  timestamptz not null default now()
+);
+
+-- Historial de versiones: las automáticas las guarda el servidor; las con nombre, las personas.
+create table if not exists public.document_versions (
+  id          uuid primary key default gen_random_uuid(),
+  document_id uuid not null references public.documents(id) on delete cascade,
+  state       bytea not null,
+  label       text not null default '' check (length(label) <= 120),
+  auto        boolean not null default false,
+  created_by  uuid references public.profiles(id) on delete set null default auth.uid(),
+  created_at  timestamptz not null default now()
+);
+create index if not exists document_versions_doc_idx on public.document_versions(document_id, created_at desc);
+
+create or replace function public.try_uuid(t text) returns uuid
+language plpgsql immutable as $$
+begin
+  return t::uuid;
+exception when others then
+  return null;
+end $$;
+
+-- Quién puede ver la carpeta donde está (o va a estar) un documento
+create or replace function public.can_view_doc_scope(p uuid, e uuid) returns boolean
+language sql stable security definer set search_path = public as $$
+  select case when p is not null then public.can_view_project(p)
+              when e is not null then public.can_view_event(e)
+              else public.is_approved() end;
+$$;
+
+create or replace function public.can_view_document(d uuid) returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (select 1 from documents x where x.id = d and public.can_view_doc_scope(x.project_id, x.event_id));
+$$;
+
+create or replace function public.can_edit_document(d uuid) returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (select 1 from documents x where x.id = d
+                 and public.can_view_doc_scope(x.project_id, x.event_id)
+                 and (x.editable_by = 'equipo' or public.is_staff() or x.created_by = auth.uid()));
+$$;
+
+-- Lo consulta el servidor de documentos con la sesión de quien se conecta: 'editar', 'leer' o null
+create or replace function public.document_access(d uuid) returns text
+language sql stable security definer set search_path = public as $$
+  select case when public.can_edit_document(d) then 'editar'
+              when public.can_view_document(d) then 'leer' end;
+$$;
+grant execute on function public.document_access(uuid) to authenticated;
+
+create or replace function public.document_before_write() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  -- El servidor de documentos (service key, sin usuario) solo actualiza la fecha y el autor del último cambio
+  if auth.uid() is null then return new; end if;
+  if tg_op = 'INSERT' then
+    new.created_by := auth.uid();
+    new.created_at := now();
+  else
+    if new.project_id is distinct from old.project_id or new.event_id is distinct from old.event_id then
+      raise exception 'Un documento no se puede pasar a otro proyecto o evento';
+    end if;
+    new.created_by := old.created_by;
+    new.created_at := old.created_at;
+    if new.editable_by is distinct from old.editable_by and not (public.is_staff() or old.created_by = auth.uid()) then
+      raise exception 'Solo quien creó el documento, un docente o un líder cambian quién lo edita';
+    end if;
+  end if;
+  if new.editable_by = 'staff' and not public.is_staff() and (tg_op = 'INSERT' or new.editable_by is distinct from old.editable_by) then
+    raise exception 'Solo docentes y líderes pueden dejar un documento como "solo lectura" para el resto';
+  end if;
+  new.updated_by := auth.uid();
+  new.updated_at := now();
+  return new;
+end $$;
+drop trigger if exists document_before_write on public.documents;
+create trigger document_before_write before insert or update on public.documents
+  for each row execute function public.document_before_write();
+
+create or replace function public.track_documents() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if new.project_id is not null then
+    perform public.log_activity(new.project_id, 'documento', format('Creó el documento "%s"', new.title));
+  end if;
+  return new;
+end $$;
+drop trigger if exists track_documents on public.documents;
+create trigger track_documents after insert on public.documents
+  for each row execute function public.track_documents();
+
+alter table public.documents         enable row level security;
+alter table public.document_states   enable row level security;
+alter table public.document_versions enable row level security;
+
+do $$
+declare r record;
+begin
+  for r in select policyname, tablename from pg_policies
+           where schemaname = 'public' and tablename in ('documents', 'document_states', 'document_versions') loop
+    execute format('drop policy %I on public.%I', r.policyname, r.tablename);
+  end loop;
+end $$;
+
+create policy documents_select on public.documents for select to authenticated
+  using (public.can_view_doc_scope(project_id, event_id));
+-- Crean: en un proyecto o evento, quien lo ve; en el taller en general, docentes y líderes
+create policy documents_insert on public.documents for insert to authenticated
+  with check (case when project_id is null and event_id is null then public.is_staff()
+                   else public.can_view_doc_scope(project_id, event_id) end);
+create policy documents_update on public.documents for update to authenticated
+  using (public.can_edit_document(id)) with check (public.can_view_doc_scope(project_id, event_id));
+create policy documents_delete on public.documents for delete to authenticated
+  using (public.can_view_doc_scope(project_id, event_id) and (created_by = auth.uid() or public.is_staff()));
+
+-- El estado lo escribe el servidor. Desde la web solo se carga el contenido inicial
+-- de un documento nuevo (plantilla, copia o .docx importado).
+create policy document_states_select on public.document_states for select to authenticated
+  using (public.can_view_document(document_id));
+create policy document_states_insert on public.document_states for insert to authenticated
+  with check (public.can_edit_document(document_id));
+
+create policy document_versions_select on public.document_versions for select to authenticated
+  using (public.can_view_document(document_id));
+create policy document_versions_insert on public.document_versions for insert to authenticated
+  with check (public.can_edit_document(document_id) and not auto);
+create policy document_versions_delete on public.document_versions for delete to authenticated
+  using (public.can_view_document(document_id) and (created_by = auth.uid() or public.is_staff()));
+
+-- Imágenes de documentos del taller en general (las de proyectos y eventos usan sus carpetas)
+drop policy if exists docs_taller_select on storage.objects;
+drop policy if exists docs_taller_insert on storage.objects;
+drop policy if exists docs_taller_delete on storage.objects;
+create policy docs_taller_select on storage.objects for select to authenticated
+  using (bucket_id = 'proyectos' and split_part(name, '/', 1) = 'taller' and public.is_approved());
+create policy docs_taller_insert on storage.objects for insert to authenticated
+  with check (bucket_id = 'proyectos' and split_part(name, '/', 1) = 'taller'
+              and public.can_edit_document(public.try_uuid(split_part(name, '/', 3))));
+create policy docs_taller_delete on storage.objects for delete to authenticated
+  using (bucket_id = 'proyectos' and split_part(name, '/', 1) = 'taller' and (owner = auth.uid() or public.is_staff()));
+
+-- =====================================================================
 -- Solo cuentas aprobadas: una política restrictiva en cada tabla se suma a las demás,
 -- así una cuenta pendiente o rechazada no ve ni modifica nada aunque tenga el dominio.
 -- La web pública (sin login) no se ve afectada. Va al final para cubrir todas las tablas.

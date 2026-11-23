@@ -13,8 +13,10 @@ Dos piezas que comparten un mismo backend **Supabase** (`nveisqekmbcdvnuebice.su
 1. **Web pública** — `index.html` (raíz) + `assets/`. Sin login.
 2. **Plataforma** — `app/`. SPA con login, para gestionar proyectos del taller. Es una PWA instalable.
 
-**No hay build, ni bundler, ni npm, ni tests.** HTML + CSS + JS (ES modules nativos) servido estático.
+**La web y la plataforma no tienen build, ni bundler, ni tests.** HTML + CSS + JS (ES modules nativos) servido estático.
 Librerías por CDN (supabase-js `@2.45.4` desde jsdelivr, fuentes de Google).
+**Única excepción:** el editor de documentos (`editor-docs/`, con npm + Vite) se compila a `app/docs/` y
+ese resultado compilado se commitea, así la publicación sigue siendo copiar archivos.
 
 ## Topología
 
@@ -38,6 +40,20 @@ app/
                         evento, sitio, marca
   js/views/tabs/*.js    pestañas de un proyecto: summary, presentation, tasks, updates,
                         milestones, ensayos, team, files, inventory, performance, activity
+  js/views/documentos.js  lista de documentos + galería de plantillas (hub #/documentos y pestañas)
+  js/views/documento.js   abre el editor a pantalla completa (#/documento/<id>)
+  css/docs.css          estilos del editor (se carga solo al abrir un documento)
+  docs/                 editor compilado (NO editar a mano: sale de editor-docs/)
+editor-docs/            código del editor estilo Google Docs (TipTap 3 + Yjs), Vite 8
+  src/editor.js         mountEditor(): pantalla, conexión, título, colaboradores, atajos
+  src/toolbar.js        barra de herramientas · src/menubar.js  menús Archivo/Editar/… · src/menu.js  menús y diálogos
+  src/panels.js         comentarios, historial de versiones, esquema, buscar y reemplazar
+  src/custom.js         extensiones propias (interlineado, sangría, salto de página, índice, comentarios, búsqueda, imágenes)
+  src/actions.js        links, imágenes, ecuaciones, tablas, descargas, impresión
+  src/docx-export.js · src/docx-import.js   Word (docx / mammoth, se cargan aparte)
+  src/demo-provider.js  modo demo: sincroniza pestañas con BroadcastChannel y guarda en localStorage
+  src/index.js          lo que exporta el paquete (mountEditor, stateFromTemplate, stateFromDocx, copyState…)
+docs-server/            servidor de tiempo real (Hocuspocus 4) para el CT de Proxmox; ver su README
 supabase/
   schema.sql            TODA la base: tipos, tablas, RLS, triggers, funciones, buckets. Idempotente.
   *.sql                 scripts de carga puntuales (textos borrador, imágenes, presentación Dron Rover)
@@ -77,6 +93,23 @@ updates, comments, project_files, inventory, activity, notifications, tests, iss
 equipment, reservations (turnos), events, event_members, event_projects, event_materials, event_tasks,
 brand_assets, aero_draft, aero_published, site_teachers, site_trayectoria`.
 
+## Documentos colaborativos
+
+- Tablas: `documents` (fila: título, carpeta, `project_id` | `event_id` | ninguno = del taller, `editable_by`
+  'equipo'|'staff'), `document_states` (estado Yjs, bytea) y `document_versions` (historial; `auto` = del servidor).
+- Permisos: `can_view_doc_scope`, `can_view_document`, `can_edit_document`, `document_access(d)` → 'editar'|'leer'.
+  El contenido NO se escribe desde la web: lo guarda `docs-server` con la service key. La web solo crea la fila,
+  carga el contenido inicial (`initDocState`, insert) y lee/guarda versiones.
+- Flujo: navegador ⇄ `wss` Hocuspocus (`DOCS_SERVER_URL` en config.js, nombre `doc:<uuid>`, token = sesión de
+  Supabase) ⇄ Supabase. Sin `DOCS_SERVER_URL` solo anda el modo demo.
+- Dentro del Y.Doc: fragmento `default` (el texto), mapa `comments` (comentarios y respuestas, la marca
+  `comment` en el texto guarda el id) y mapa `meta` (título en vivo; manda el de la base al abrir).
+- Imágenes: bucket privado `proyectos`, en el documento queda `storage:<ruta>` y se muestra con link firmado.
+- Íconos: Material Symbols de Google Fonts, pedidos solo los que se usan. `vite.config.js` junta la lista sola
+  de `ic('…')`, `icon: '…'` y `b('…', '…')`; un ícono escrito de otra forma va en `EXTRA_ICONS`.
+- Menús y barras hacen `preventDefault` en `mousedown` para no sacarle el foco al editor (si no, se pierde la
+  selección y Enter puede borrar texto). Mantenerlo en cualquier control nuevo.
+
 ## Cómo funciona la web pública (`index.html`)
 
 - Página única con "rutas" por hash (`#inicio`, `#sumate`, `#profes`, `#trayectoria`, `#trayectoria-<slug>`…),
@@ -100,10 +133,12 @@ Docentes, trayectoria y otras pestañas de "Sitio web" están en `views/sitio.js
 ## Convenciones a respetar
 
 - **Cache-busting `?v=AAAAMMDDHHMM`**: todos los imports JS, el CSS y el registro de `sw.js` llevan el mismo
-  `?v=` (hoy `202610180031`). El proxy de la universidad cachea agresivo, así que **al cambiar cualquier
+  `?v=` (hoy `202611230200`). El proxy de la universidad cachea agresivo, así que **al cambiar cualquier
   archivo de `app/` hay que subir la versión en TODOS los archivos** (`app/index.html`, `main.js`, cada vista y
-  tab que importe con `?v=`). Ej.: `grep -rl 'v=202610180031' app | xargs sed -i 's/v=202610180031/v=NUEVA/g'`.
+  tab que importe con `?v=`). Ej.: `grep -rl 'v=202611230200' app | xargs sed -i 's/v=202611230200/v=NUEVA/g'`.
 - **Archivo nuevo en `app/`** → agregarlo a la lista `SHELL` de `app/sw.js`.
+- **Cambio en el editor de documentos** → editar `editor-docs/src/`, correr `cd editor-docs && npm ci && npm run build`
+  (regenera `app/docs/`), commitear también `app/docs/`, y subir el `?v=` como en cualquier cambio de `app/`.
 - **Método nuevo de datos** → implementarlo en `api.js` **y** en `demo-api.js` (misma firma), si no el modo demo se rompe.
 - **Cambio de base** → editar `supabase/schema.sql` manteniéndolo idempotente (`if not exists`, `create or
   replace`, políticas que se borran y recrean). Se corre a mano en el SQL Editor de Supabase.
@@ -119,3 +154,6 @@ python -m http.server 8765
 - `http://localhost:8765/` web pública · `http://localhost:8765/app/?demo` plataforma sin login
   (barra arriba para cambiar de usuario/rol) · `/app/` real (necesita red a Supabase).
 - Para verificar visualmente usar Playwright (preinstalado) contra el server local con `?demo`.
+- Documentos en modo demo: `/app/?demo#/documentos`; abrir el mismo documento en dos pestañas prueba la edición
+  en simultáneo. Con servidor real: `cd docs-server && npm install && npm run dev` (sin login, en memoria) y montar
+  el editor apuntando a `ws://localhost:1234`.

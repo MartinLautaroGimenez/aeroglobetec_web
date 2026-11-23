@@ -1,4 +1,4 @@
-import { esc, avatar, emptyState } from '../../ui.js?v=202610180031';
+import { esc, avatar, emptyState } from '../../ui.js?v=202611230200';
 
 export async function renderPerformance(el, ctx) {
   const { api, project, staff, me } = ctx;

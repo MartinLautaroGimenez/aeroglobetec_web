@@ -12,6 +12,8 @@ Sitio y herramientas del taller AeroGlobETec (ETec · Universidad de Mendoza).
 | `supabase/textos_sitio_borrador.sql` | Propuesta de textos para la web: los carga como borrador; se revisan y publican desde **Sitio web** |
 | `supabase/imagenes_sitio.sql` | Pasa los logos del contenido publicado a los archivos de `assets/`. **Correrlo después de publicar la web nueva.** |
 | `supabase/presentacion_dron_rover.sql` | Carga la presentación del proyecto Dron Rover en la plataforma |
+| `editor-docs/` | Código del editor de documentos (estilo Google Docs). Se compila a `app/docs/` |
+| `docs-server/` | Servidor de tiempo real de los documentos. Corre aparte, en el CT de Proxmox (ver su `README.md`) |
 
 ## La plataforma
 
@@ -48,6 +50,17 @@ insert into public.admins (email) values ('nombre@alumno.etec.um.edu.ar');
 - **Notificaciones:** la campanita avisa cuando te asignan una tarea o una falla, te revisan un avance, te comentan o te mencionan.
 
 **Sitio web:** docentes y admins editan textos, apartados, fotos, galerías y colores de la web pública desde la plataforma, con vista previa. Los cambios se guardan como borrador y la web los muestra recién al tocar **Publicar en la web**. La base de datos solo deja guardar, publicar y subir fotos a docentes y admins con sesión iniciada. La web pública lee lo publicado sin login.
+
+**Documentos:** documentos que se escriben entre varias personas a la vez, como en Google Docs o Word. Están en **Documentos** (menú lateral) y en la pestaña **Documentos** de cada proyecto y evento. Cada documento lo ven las mismas personas que ven su proyecto o evento; los del taller en general los ven todos. Tienen:
+- **Edición en simultáneo:** se ven los cursores y los nombres de quienes están escribiendo. Se guarda solo.
+- **Formato completo:** títulos, fuentes, tamaños, colores, resaltado, alineación, interlineado, sangría, listas, listas de tareas, tablas, imágenes, enlaces, ecuaciones, índice automático, saltos de página y caracteres especiales, sobre una hoja A4 con regla.
+- **Comentarios** sobre el texto, con respuestas y "resuelto".
+- **Historial de versiones:** una automática cada media hora de trabajo y las que se guardan con nombre. Se pueden ver y restaurar.
+- **Plantillas** (informe de ensayo, acta de reunión, informe técnico, propuesta) e **importar un Word**.
+- **Descargar** en Word (.docx), PDF, HTML o texto, e imprimir.
+- **Permisos:** quien crea el documento, los docentes y los líderes pueden dejarlo en "solo lectura" para el resto.
+
+Necesitan el servidor de documentos (`docs-server/`) prendido y su dirección en `DOCS_SERVER_URL` (`app/js/config.js`). Sin eso solo andan en el modo demo, donde se puede probar la edición en simultáneo abriendo el mismo documento en dos pestañas.
 
 **Charlas y competencias:** cada evento (charla o competencia) tiene fecha, lugar, estado, un equipo con roles (expositor/a, equipo técnico, etc.) y los proyectos que se presentan, sean del panel o de afuera. Además:
 - **Materiales:** presentaciones, infografías, videos, documentos y enlaces. Los links de Canva, Google Slides/Docs/Drive y YouTube se ven embebidos adentro de la plataforma.
@@ -105,7 +118,11 @@ La pantalla de login ya tiene el campo para escribirlo. El servidor de mails que
 3. En **URIs de redireccionamiento autorizados**, poné `https://nveisqekmbcdvnuebice.supabase.co/auth/v1/callback`.
 4. Copiá el **Client ID** y el **Client Secret**. En Supabase, andá a **Authentication → Sign In / Providers → Google**, pegalos y activá el proveedor.
 
-### 5. Claves
+### 5. Servidor de documentos
+
+Seguí `docs-server/README.md`: se instala en el CT de Proxmox, se le pone `https` y su dirección va en `DOCS_SERVER_URL` (`app/js/config.js`).
+
+### 6. Claves
 
 `app/js/config.js` tiene la URL del proyecto y la **publishable key**, que es pública por diseño. La **secret key nunca va en el código**, porque saltea todos los permisos. Si alguna vez se compartió, rotala en **Project Settings → API Keys**.
 
@@ -132,7 +149,7 @@ assets/        imágenes de la web
 app/           la plataforma (queda en /app/)
 ```
 
-Las carpetas `supabase/` y el `README.md` no hace falta subirlas.
+Las carpetas `supabase/`, `editor-docs/`, `docs-server/` y el `README.md` no hace falta subirlas. `app/docs/` sí: es el editor ya compilado.
 
 **Importante:** el contenido del editor usa las imágenes de `assets/`, así que esa carpeta siempre tiene que subirse junto con `index.html`.
 
@@ -151,7 +168,17 @@ app/
   js/main.js          sesión, menú y rutas
   js/views/           pantallas (inicio, proyecto, usuarios, informe)
   js/views/tabs/      pestañas de cada proyecto
+  docs/               editor de documentos ya compilado (no se edita a mano)
+  css/docs.css        estilos del editor de documentos
+editor-docs/          código del editor (TipTap + Yjs); npm run build lo compila a app/docs/
+docs-server/          servidor de tiempo real (Hocuspocus); corre en el CT de Proxmox
 supabase/schema.sql   tablas, permisos (RLS), triggers y funciones de rendimiento
+```
+
+Para cambiar el editor de documentos:
+
+```bash
+cd editor-docs && npm ci && npm run build
 ```
 
 Los permisos de verdad los aplica la base de datos con Row Level Security. La interfaz solo esconde los botones que no corresponden.

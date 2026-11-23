@@ -1,0 +1,36 @@
+{
+  "name": "aeroglobetec-editor-docs",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite"
+  },
+  "devDependencies": {
+    "vite": "^8.3.8"
+  },
+  "dependencies": {
+    "@hocuspocus/provider": "^4.9.0",
+    "@tiptap/core": "^3.35.0",
+    "@tiptap/extension-collaboration": "^3.35.0",
+    "@tiptap/extension-collaboration-caret": "^3.35.0",
+    "@tiptap/extension-highlight": "^3.35.0",
+    "@tiptap/extension-image": "^3.35.0",
+    "@tiptap/extension-list": "^3.35.0",
+    "@tiptap/extension-mathematics": "^3.35.0",
+    "@tiptap/extension-subscript": "^3.35.0",
+    "@tiptap/extension-superscript": "^3.35.0",
+    "@tiptap/extension-table": "^3.35.0",
+    "@tiptap/extension-text-align": "^3.35.0",
+    "@tiptap/extension-text-style": "^3.35.0",
+    "@tiptap/extensions": "^3.35.0",
+    "@tiptap/pm": "^3.35.0",
+    "@tiptap/starter-kit": "^3.35.0",
+    "@tiptap/y-tiptap": "^3.3.1",
+    "docx": "^9.16.0",
+    "katex": "^0.18.10",
+    "mammoth": "^1.13.0",
+    "y-protocols": "^1.0.7",
+    "yjs": "^13.6.33"
+  }
+}

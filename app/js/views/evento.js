@@ -2,8 +2,9 @@
 import {
   esc, icon, name, avatar, isStaff, field, options, openForm, confirmAction, toast, errorMessage,
   fmtDate, daysUntil, dueLabel, fileSize, emptyState, embedUrl, hasAccess,
-} from '../ui.js?v=202610180031';
-import { KIND, EVENT_STATUS, editEvent } from './eventos.js?v=202610180031';
+} from '../ui.js?v=202611230200';
+import { KIND, EVENT_STATUS, editEvent } from './eventos.js?v=202611230200';
+import { renderDocList } from './documentos.js?v=202611230200';
 
 const MATERIAL = {
   presentacion: ['Presentaciones', 'presentation'],
@@ -14,7 +15,7 @@ const MATERIAL = {
 };
 const SINGULAR = { presentacion: 'Presentación', infografia: 'Infografía', video: 'Video', documento: 'Documento', enlace: 'Enlace' };
 const isImage = (u) => /\.(png|jpe?g|webp|gif|svg)(\?|#|$)/i.test(u || '');
-const TABS = [['resumen', 'Resumen'], ['materiales', 'Materiales'], ['preparacion', 'Preparación'], ['equipo', 'Equipo y proyectos']];
+const TABS = [['resumen', 'Resumen'], ['materiales', 'Materiales'], ['documentos', 'Documentos'], ['preparacion', 'Preparación'], ['equipo', 'Equipo y proyectos']];
 
 export async function renderEvento(el, ctx) {
   const { api, me, params } = ctx;
@@ -279,6 +280,7 @@ export async function renderEvento(el, ctx) {
   });
 
   // Se arma la pestaña al final, cuando ya están definidas todas las funciones y variables
+  if (tab === 'documentos') { await renderDocList(body, ctx, { eventId: id }); return; }
   ({ resumen, materiales, preparacion, equipo })[tab]();
 
   async function viewMaterial(m) {
