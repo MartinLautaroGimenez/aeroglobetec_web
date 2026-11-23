@@ -128,6 +128,12 @@ curl -fsSL https://raw.githubusercontent.com/MartinLautaroGimenez/aeroglobetec_w
 
 Pregunta cómo se va a entrar (solo red local, dominio propio o Cloudflare Tunnel) y la *secret key* de Supabase, que queda solo en esa máquina. Para actualizar después: `aeroglobetec-actualizar`. Los detalles están al principio de `deploy/instalar.sh`.
 
+**Probar con un proyecto de Supabase aparte** (sin tocar los datos del taller):
+
+1. Creá un proyecto nuevo en Supabase y corré `supabase/schema.sql` completo en su **SQL Editor**. Crea todo desde cero y deja como admins los mails de la tabla `admins` que están en el schema.
+2. En ese proyecto, **Authentication → URL Configuration**: poné la dirección del CT (por ejemplo `https://docs.tudominio.com/app/`) en **Site URL** y en **Redirect URLs**. El login por link al mail anda sin configurar nada más. El de Google hay que configurarlo de nuevo, porque es otro proyecto.
+3. Corré el instalador. Cuando pregunte por el proyecto, pegá la URL y la *publishable key* del proyecto de prueba. El instalador las cambia solo en la copia que publica: el repo sigue apuntando al proyecto del taller.
+
 **Solo el servidor de documentos**, con la web en otro lado: seguí `docs-server/README.md`. Su dirección va en `DOCS_SERVER_URL` (`app/js/config.js`).
 
 ### 6. Claves

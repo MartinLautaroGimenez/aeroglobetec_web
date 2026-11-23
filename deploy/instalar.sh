@@ -17,6 +17,8 @@
 #   RAMA=main MODO=local SUPABASE_SERVICE_KEY=sb_secret_... NO_INTERACTIVO=1 bash instalar.sh
 #   MODO: local (http, para probar en la red) · dominio (https automático) · cloudflare (Cloudflare Tunnel)
 #   Otras: DOMINIO, CF_TUNNEL_TOKEN, SUPABASE_DB_URL (para cargar schema.sql), REPO_URL
+#   Otro proyecto de Supabase (por ejemplo uno de prueba): SUPABASE_URL y SUPABASE_ANON_KEY (la publishable key).
+#   Sin eso se usa el del taller (el de app/js/config.js).
 # =====================================================================
 set -Eeuo pipefail
 
@@ -78,9 +80,24 @@ EOF
   [ -f "$DIR/docs-server/server.js" ] || falla "La rama \"$RAMA\" todavía no tiene los documentos colaborativos. Probá con RAMA=claude/magical-ritchie-z2s9si (o la rama donde estén)."
   ok "Código en $DIR ($(git -C "$DIR" log -1 --format='%h · %s'))"
 
-  SUPABASE_URL=$(sed -n "s/^export const SUPABASE_URL = '\(.*\)';.*/\1/p" "$DIR/app/js/config.js")
-  SUPABASE_ANON_KEY=$(sed -n "s/^export const SUPABASE_KEY = '\(.*\)';.*/\1/p" "$DIR/app/js/config.js")
-  [ -n "$SUPABASE_URL" ] && [ -n "$SUPABASE_ANON_KEY" ] || falla "No encontré la URL o la clave pública de Supabase en app/js/config.js."
+  # Proyecto de Supabase: el del taller (app/js/config.js) u otro, por ejemplo uno de prueba
+  ORIG_URL=$(sed -n "s/^export const SUPABASE_URL = '\(.*\)';.*/\1/p" "$DIR/app/js/config.js")
+  ORIG_KEY=$(sed -n "s/^export const SUPABASE_KEY = '\(.*\)';.*/\1/p" "$DIR/app/js/config.js")
+  [ -n "$ORIG_URL" ] && [ -n "$ORIG_KEY" ] || falla "No encontré la URL o la clave pública de Supabase en app/js/config.js."
+  if [ -z "${SUPABASE_URL:-}" ] && tty_ok; then
+    echo "  ¿Qué proyecto de Supabase uso? Enter = el del taller. Para uno de prueba, pegá su URL (Project Settings → Data API)." > /dev/tty
+  fi
+  preguntar SUPABASE_URL "URL del proyecto" "$ORIG_URL"
+  SUPABASE_URL=${SUPABASE_URL%/}
+  [[ "$SUPABASE_URL" =~ ^https://[^/]+$ ]] || falla "La URL de Supabase tiene que ser como https://xxxx.supabase.co"
+  if [ "$SUPABASE_URL" = "$ORIG_URL" ]; then
+    SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-$ORIG_KEY}
+  else
+    preguntar SUPABASE_ANON_KEY "Publishable key de ese proyecto (Project Settings → API Keys)" ""
+    [ -n "${SUPABASE_ANON_KEY:-}" ] || falla "Para otro proyecto de Supabase hace falta su publishable key."
+  fi
+  guardar_conf
+  ok "Supabase: $SUPABASE_URL$( [ "$SUPABASE_URL" = "$ORIG_URL" ] && echo ' (el del taller)' || echo ' (otro proyecto)')"
 
   # ---------- Servidor de documentos ----------
   paso "Preparando el servidor de documentos"
@@ -88,7 +105,10 @@ EOF
   (cd "$DIR/docs-server" && npm ci --omit=dev --no-audit --no-fund --loglevel=error >/dev/null)
 
   local envf="$DIR/docs-server/.env" previa=""
-  [ -f "$envf" ] && previa=$(sed -n 's/^SUPABASE_SERVICE_KEY=//p' "$envf")
+  # La secret key guardada sirve solo si es del mismo proyecto
+  if [ -f "$envf" ] && [ "$(sed -n 's/^SUPABASE_URL=//p' "$envf")" = "$SUPABASE_URL" ]; then
+    previa=$(sed -n 's/^SUPABASE_SERVICE_KEY=//p' "$envf")
+  fi
   if [ -z "${SUPABASE_SERVICE_KEY:-}" ] && [ -n "$previa" ]; then
     SUPABASE_SERVICE_KEY=$previa
     ok "Se usa la secret key que ya estaba guardada"
@@ -125,6 +145,16 @@ EOF
   # La plataforma se conecta al servidor de documentos en la misma dirección (/docs-ws)
   sed -i "s#^export const DOCS_SERVER_URL = .*#export const DOCS_SERVER_URL = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/docs-ws'; // puesto por deploy/instalar.sh#" "$WEB/app/js/config.js"
   grep -q "puesto por deploy/instalar.sh" "$WEB/app/js/config.js" || falla "No pude configurar DOCS_SERVER_URL en app/js/config.js."
+  # Otro proyecto de Supabase: se cambia la dirección y la clave pública en la copia publicada
+  if [ "$SUPABASE_URL" != "$ORIG_URL" ] || [ "$SUPABASE_ANON_KEY" != "$ORIG_KEY" ]; then
+    local ref_o ref_n
+    ref_o=$(sed -E 's#^https://([^.]+)\..*#\1#' <<< "$ORIG_URL")
+    ref_n=$(sed -E 's#^https://([^.]+)\..*#\1#' <<< "$SUPABASE_URL")
+    grep -rlF -e "$ORIG_URL" -e "$ORIG_KEY" --include='*.html' --include='*.js' "$WEB/index.html" "$WEB/app" | grep -v '/app/docs/' \
+      | xargs -r sed -i "s#$ORIG_URL#$SUPABASE_URL#g; s#$ORIG_KEY#$SUPABASE_ANON_KEY#g; s#$ref_o#$ref_n#g"
+    grep -qF "'$SUPABASE_URL'" "$WEB/app/js/config.js" || falla "No pude cambiar el proyecto de Supabase en app/js/config.js."
+    ok "La web y la plataforma usan $SUPABASE_URL"
+  fi
   ok "Web lista"
 
   # ---------- Caddy ----------
@@ -221,13 +251,14 @@ cargar_conf() {
   [ -f "$CONF" ] || return 0
   local k v
   while IFS='=' read -r k v; do
-    case "$k" in RAMA|MODO|DOMINIO) [ -z "${!k:-}" ] && printf -v "$k" '%s' "$v" ;; esac
+    case "$k" in RAMA|MODO|DOMINIO|SUPABASE_URL|SUPABASE_ANON_KEY) [ -z "${!k:-}" ] && printf -v "$k" '%s' "$v" ;; esac
   done < "$CONF"
   ok "Usando la configuración guardada en $CONF"
 }
 guardar_conf() {
   mkdir -p "$(dirname "$CONF")"
-  printf 'RAMA=%s\nMODO=%s\nDOMINIO=%s\n' "$RAMA" "$MODO" "${DOMINIO:-}" > "$CONF"
+  # La publishable key es pública por diseño; la secret key nunca se guarda acá
+  printf 'RAMA=%s\nMODO=%s\nDOMINIO=%s\nSUPABASE_URL=%s\nSUPABASE_ANON_KEY=%s\n' "$RAMA" "$MODO" "${DOMINIO:-}" "${SUPABASE_URL:-}" "${SUPABASE_ANON_KEY:-}" > "$CONF"
 }
 
 origenes() {
@@ -334,7 +365,7 @@ ${V}${B}✓ Listo${N}
   Plataforma:   $url/app/
   Probar sin login (modo demo): $url/app/?demo#/documentos
 
-${B}Falta en Supabase (una sola vez):${N}
+${B}Falta en Supabase (una sola vez), en ${SUPABASE_URL}:${N}
   · Authentication → URL Configuration → Redirect URLs: agregá  $url/app/
 $( [ "${BASE_OK:-}" = 1 ] || echo "  · SQL Editor: corré supabase/schema.sql (o volvé a correr esto con SUPABASE_DB_URL=…)")
   · Si usan login con Google: en Google Cloud agregá  $url  en "Orígenes autorizados de JavaScript".
